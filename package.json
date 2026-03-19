@@ -1,0 +1,39 @@
+{
+  "name": "@a24k/n8n-nodes-mattermost",
+  "version": "0.1.0",
+  "description": "n8n community node for Mattermost with file attachment and rich post support",
+  "keywords": [
+    "n8n-community-node-package"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/a24k/n8n-nodes-mattermost",
+  "author": {
+    "name": "a24k"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a24k/n8n-nodes-mattermost.git"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "n8n",
+    "lint": "eslint nodes --ext .ts",
+    "lint:fix": "eslint nodes --ext .ts --fix",
+    "test": "bun test"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/Mattermost/Mattermost.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "n8n-workflow": "^1.0.0",
+    "typescript": "^5.0.0"
+  }
+}
