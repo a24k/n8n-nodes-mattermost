@@ -99,6 +99,7 @@ export class Mattermost implements INodeType {
 				type: "fixedCollection",
 				typeOptions: {
 					multipleValues: true,
+					multipleValueButtonText: "Add File",
 					maxValue: 10,
 				},
 				default: {},
@@ -126,6 +127,7 @@ export class Mattermost implements INodeType {
 				type: "fixedCollection",
 				typeOptions: {
 					multipleValues: true,
+					multipleValueButtonText: "Add Attachment",
 				},
 				default: {},
 				description: "Rich message attachments (Slack-compatible format)",
