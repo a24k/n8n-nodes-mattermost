@@ -6,7 +6,7 @@
 	"resources": {
 		"primaryDocumentation": [
 			{
-				"url": "https://api.mattermost.com/"
+				"url": "https://github.com/a24k/n8n-nodes-mattermost"
 			}
 		]
 	}
