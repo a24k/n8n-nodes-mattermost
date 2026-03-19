@@ -17,7 +17,6 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "n8n",
     "lint": "biome check src tests",
     "lint:fix": "biome check --write src tests",
     "test": "bun test"
