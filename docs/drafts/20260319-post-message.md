@@ -142,10 +142,40 @@ Set `usableAsTool: true` so the node can be invoked as a tool from an AI Agent n
 ## Implementation Notes
 
 - Uses Mattermost API v4 (`/api/v4/files`, `/api/v4/posts`)
-- Reuses the `mattermostApi` credential type from `n8n-nodes-base` (reads `baseURL` and `token` from the credential)
+- Reuses the `mattermostApi` credential type from `n8n-nodes-base`
+  - Credential fields: `baseUrl` (note lowercase `u`), `accessToken`, `allowUnauthorizedCerts`
+  - No credentials source file is required in this package
+  - `package.json` `n8n` section does **not** include a `credentials` entry
 - No runtime dependencies (required for npm Verified status)
 - Package name must begin with `@<scope>/n8n-nodes-` — `@a24k/n8n-nodes-mattermost` satisfies this requirement
 - `package.json` must include the `n8n-community-node-package` keyword
+
+### File Upload API Details
+
+**Endpoint**: `POST /api/v4/files?channel_id=<id>`
+
+- Multipart form field for the file binary: **`files`** (plural)
+- `channel_id` is a query parameter, not a form field
+- Response: `{ "file_infos": [{ "id": "<file_id>", ... }] }`
+- File ID for the post is `file_infos[0].id`
+
+### Binary Data Handling
+
+Access n8n binary data using the framework helpers:
+
+```typescript
+// Get metadata (fileName, mimeType)
+const meta = this.helpers.assertBinaryData(itemIndex, binaryPropertyName);
+
+// Get the raw buffer for upload
+const buffer = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
+
+// Pass to multipart form
+formData['files'] = {
+  value: buffer,
+  options: { filename: meta.fileName, contentType: meta.mimeType },
+};
+```
 
 ---
 
