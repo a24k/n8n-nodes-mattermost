@@ -45,6 +45,25 @@ interface PostResponse {
 	create_at: number;
 }
 
+// Exceptions where subtype alone is not a usable file extension
+const MIME_EXT_OVERRIDES: Record<string, string> = {
+	"image/jpeg": "jpg",
+	"image/svg+xml": "svg",
+	"text/plain": "txt",
+};
+
+/**
+ * Appends a file extension derived from the MIME type when the filename has
+ * none. Leaves the filename unchanged if it already contains a dot or if the
+ * MIME type is `application/octet-stream` (indeterminate type).
+ */
+function withExtension(fileName: string, mimeType: string): string {
+	if (fileName.includes(".")) return fileName;
+	if (mimeType === "application/octet-stream") return fileName;
+	const ext = MIME_EXT_OVERRIDES[mimeType] ?? mimeType.split("/")[1];
+	return ext ? `${fileName}.${ext}` : fileName;
+}
+
 export class Mattermost implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: "Mattermost @a24k",
@@ -334,13 +353,16 @@ export class Mattermost implements INodeType {
 								binaryPropertyName,
 							);
 
+							const mimeType = binaryMeta.mimeType ?? "application/octet-stream";
+							const fileName = withExtension(
+								binaryMeta.fileName ?? "file",
+								mimeType,
+							);
 							const formData = new FormData();
 							formData.append(
 								"files",
-								new Blob([buffer], {
-									type: binaryMeta.mimeType ?? "application/octet-stream",
-								}),
-								binaryMeta.fileName ?? "file",
+								new Blob([buffer], { type: mimeType }),
+								fileName,
 							);
 
 							const response = (await this.helpers.httpRequest({
