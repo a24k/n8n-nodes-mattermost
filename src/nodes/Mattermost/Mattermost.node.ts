@@ -285,38 +285,6 @@ export class Mattermost implements INodeType {
 									},
 								],
 							},
-							{
-								displayName: "Additional Fields",
-								name: "additionalFields",
-								type: "fixedCollection",
-								typeOptions: {
-									multipleValues: true,
-								},
-								default: {},
-								description: "Extra fields not covered above (key/value pairs)",
-								options: [
-									{
-										name: "field",
-										displayName: "Field",
-										values: [
-											{
-												displayName: "Key",
-												name: "key",
-												type: "string",
-												default: "",
-												description: "Field name",
-											},
-											{
-												displayName: "Value",
-												name: "value",
-												type: "string",
-												default: "",
-												description: "Field value",
-											},
-										],
-									},
-								],
-							},
 						],
 					},
 				],
@@ -339,9 +307,7 @@ export class Mattermost implements INodeType {
 				const channelId = this.getNodeParameter("channelId", i) as string;
 				const message = this.getNodeParameter("message", i) as string;
 				const rootId = this.getNodeParameter("rootId", i) as string;
-				const filesParam = this.getNodeParameter("files", i) as {
-					file?: Array<{ binaryPropertyName: string }>;
-				};
+				const filesParam = this.getNodeParameter("files", i, []) as string[];
 				const attachmentsParam = this.getNodeParameter("attachments", i) as {
 					attachment?: Array<{
 						fallback: string;
@@ -362,20 +328,16 @@ export class Mattermost implements INodeType {
 						fields?: {
 							field?: Array<{ title: string; value: string; short: boolean }>;
 						};
-						additionalFields?: {
-							field?: Array<{ key: string; value: string }>;
-						};
-					}>;
+							}>;
 				};
 
 				// Step 1: Upload files in parallel
-				const fileItems = filesParam.file ?? [];
+				const fileItems = filesParam;
 				const uploadedFileIds: string[] = [];
 
 				if (fileItems.length > 0) {
 					const uploadResults = await Promise.all(
-						fileItems.map(async (fileItem) => {
-							const binaryPropertyName = fileItem.binaryPropertyName;
+						fileItems.map(async (binaryPropertyName) => {
 							const binaryMeta = this.helpers.assertBinaryData(
 								i,
 								binaryPropertyName,
@@ -442,12 +404,6 @@ export class Mattermost implements INodeType {
 						}));
 					}
 
-					const additionalFieldItems = att.additionalFields?.field ?? [];
-					for (const extra of additionalFieldItems) {
-						if (extra.key) {
-							result[extra.key] = extra.value;
-						}
-					}
 
 					return result;
 				});
