@@ -96,29 +96,16 @@ export class Mattermost implements INodeType {
 			{
 				displayName: "Files",
 				name: "files",
-				type: "fixedCollection",
+				type: "string",
 				typeOptions: {
 					multipleValues: true,
+					multipleValueButtonText: "Add File",
 					maxValue: 10,
 				},
-				default: {},
-				description: "Files to attach to the post (max 10)",
-				options: [
-					{
-						name: "file",
-						displayName: "File",
-						values: [
-							{
-								displayName: "Binary Property",
-								name: "binaryPropertyName",
-								type: "string",
-								default: "data",
-								description:
-									"Name of the n8n binary data property containing the file",
-							},
-						],
-					},
-				],
+				default: [],
+				placeholder: "data",
+				description:
+					"Binary property name(s) of files to attach to the post (max 10)",
 			},
 			{
 				displayName: "Attachments",
