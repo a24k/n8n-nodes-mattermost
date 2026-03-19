@@ -17,8 +17,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && cp src/nodes/Mattermost/mattermost.svg dist/nodes/Mattermost/",
-    "dev": "n8n",
-    "lint": "biome check src tests",
+"lint": "biome check src tests",
     "lint:fix": "biome check --write src tests",
     "prepublishOnly": "bun run lint && bun run build",
     "test": "bun test"
