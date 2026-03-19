@@ -18,8 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "n8n",
-    "lint": "eslint nodes --ext .ts",
-    "lint:fix": "eslint nodes --ext .ts --fix",
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests",
     "test": "bun test"
   },
   "files": [
@@ -32,6 +32,7 @@
     ]
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
     "@types/node": "^22.0.0",
     "n8n-workflow": "^1.0.0",
     "typescript": "^5.0.0"
