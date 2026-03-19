@@ -105,7 +105,7 @@ export class Mattermost implements INodeType {
 				default: [],
 				placeholder: "data",
 				description:
-					"Binary property name(s) of files to attach to the post (max 10)",
+					"n8n binary property name(s) containing the files to upload. Enter the property name (default: data) and click Add File for each file (max 10).",
 			},
 			{
 				displayName: "Attachments",
@@ -115,7 +115,7 @@ export class Mattermost implements INodeType {
 					multipleValues: true,
 				},
 				default: {},
-				description: "Rich message attachments (Slack-compatible format)",
+				description: "Rich message attachments (Slack-compatible format). Click Choose… to add an attachment.",
 				options: [
 					{
 						name: "attachment",
@@ -239,7 +239,7 @@ export class Mattermost implements INodeType {
 									multipleValues: true,
 								},
 								default: {},
-								description: "Tabular information within the attachment",
+								description: "Tabular information within the attachment. Click Choose… to add a field.",
 								options: [
 									{
 										name: "field",
