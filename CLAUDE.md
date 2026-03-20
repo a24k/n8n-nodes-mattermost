@@ -2,6 +2,15 @@
 
 This file provides guidance for Claude Code when working in this repository.
 
+## Language Policy
+
+All externally visible content must be written in **English**:
+- Commit messages
+- Pull request titles and descriptions
+- Draft and requirements documents under `docs/`
+
+Conversation with the user may be in any language.
+
 ## Project Overview
 
 `@a24k/n8n-nodes-mattermost` is an n8n community node that extends the official Mattermost node with support for file attachments and message attachments (rich posts).
@@ -124,4 +133,23 @@ not in this package. Only list credentials that this package itself defines.
 ```bash
 bun run build
 npm publish --access public
+```
+
+## Creating GitHub PRs (Claude Code on the web environment)
+
+`gh` is not available in this environment, but `GITHUB_TOKEN` is set.
+Use curl to call the GitHub API directly:
+
+```bash
+curl -s -X POST "https://api.github.com/repos/a24k/n8n-nodes-mattermost/pulls" \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg title "PR title" \
+    --arg head "branch-name" \
+    --arg base "main" \
+    --arg body "PR body" \
+    '{title: $title, head: $head, base: $base, body: $body}')" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('html_url') or d.get('message'))"
 ```
