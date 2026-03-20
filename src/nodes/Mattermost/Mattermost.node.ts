@@ -96,7 +96,7 @@ export class Mattermost implements INodeType {
 				description: "The ID of the channel to post to",
 			},
 			{
-				displayName: "Message",
+				displayName: "Message (optional)",
 				name: "message",
 				type: "string",
 				typeOptions: {
@@ -106,28 +106,14 @@ export class Mattermost implements INodeType {
 				description: "The message body (Markdown supported)",
 			},
 			{
-				displayName: "Root Post ID",
+				displayName: "Root Post ID (optional)",
 				name: "rootId",
 				type: "string",
 				default: "",
 				description: "Parent post ID for thread replies",
 			},
 			{
-				displayName: "Files",
-				name: "files",
-				type: "string",
-				typeOptions: {
-					multipleValues: true,
-					multipleValueButtonText: "Add File",
-					maxValue: 10,
-				},
-				default: [],
-				placeholder: "data",
-				description:
-					"n8n binary property name(s) containing the files to upload. Enter the property name (default: data) and click Add File for each file (max 10).",
-			},
-			{
-				displayName: "Attachments",
+				displayName: "Attachments (optional)",
 				name: "attachments",
 				type: "fixedCollection",
 				typeOptions: {
@@ -294,6 +280,20 @@ export class Mattermost implements INodeType {
 						],
 					},
 				],
+			},
+			{
+				displayName: "Files (optional)",
+				name: "files",
+				type: "string",
+				typeOptions: {
+					multipleValues: true,
+					multipleValueButtonText: "Add File",
+					maxValue: 10,
+				},
+				default: [],
+				placeholder: "data",
+				description:
+					"n8n binary property name(s) containing the files to upload. Enter the property name (default: data) and click Add File for each file (max 10).",
 			},
 		],
 	};
