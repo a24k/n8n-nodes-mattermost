@@ -125,3 +125,22 @@ not in this package. Only list credentials that this package itself defines.
 bun run build
 npm publish --access public
 ```
+
+## GitHub PR 作成（Claude Code on the web 環境）
+
+この環境では `gh` コマンドは使えないが、`GITHUB_TOKEN` 環境変数が利用可能なため、
+curl で GitHub API を直接叩いて PR を作成できる。
+
+```bash
+curl -s -X POST "https://api.github.com/repos/a24k/n8n-nodes-mattermost/pulls" \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg title "PR タイトル" \
+    --arg head "ブランチ名" \
+    --arg base "main" \
+    --arg body "PR 本文" \
+    '{title: $title, head: $head, base: $base, body: $body}')" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('html_url') or d.get('message'))"
+```
