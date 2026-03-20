@@ -11,7 +11,8 @@ The built-in Mattermost node already supports plain posts, thread replies, and r
 | Plain posts | ✅ | ✅ |
 | Thread replies | ✅ | ✅ |
 | Rich attachments (props) | ✅ | ✅ |
-| File attachments | ❌ | ✅ Up to 10 files, uploaded in parallel |
+| File attachments | ❌ | ✅ Up to 10 files (parallel or sequential) |
+| Extra body fields | ❌ | ✅ Merge arbitrary JSON into the post body |
 | AI Agent tool | ❌ | ✅ |
 
 ## Installation
@@ -51,10 +52,13 @@ A single operation covers plain posts, file-attached posts, and rich attachment 
 | Root Post ID | — | Parent post ID for thread replies |
 | Files | — | Comma-separated binary property names (see [File attachments](#file-attachments)) |
 | Attachments | — | One or more rich attachments (see [Rich attachments](#rich-attachments)) |
+| Advanced Options | — | Extra Body Fields and upload mode (see [Advanced Options](#advanced-options)) |
 
 ### File attachments
 
-Enter binary property names separated by commas in the **Files** field (e.g. `data, image, report`). Each name must match a binary property on the current n8n item. Up to 10 files are supported and uploaded in parallel before the post is created.
+Enter binary property names separated by commas in the **Files** field (e.g. `data, image, report`). Each name must match a binary property on the current n8n item. Up to 10 files are supported; all files are uploaded before the post is created.
+
+By default, files are uploaded in **parallel** (faster). To guarantee display order in Mattermost, enable **Upload Files Sequentially** under Advanced Options.
 
 **Example workflow:**
 
@@ -107,6 +111,15 @@ Click **Add Attachment** to add one or more [Slack-compatible message attachment
 | Title | Column header |
 | Value | Column content. Markdown and @mentions supported. |
 | Short | If enabled, renders side-by-side with the adjacent field |
+
+### Advanced Options
+
+Expand **Advanced Options** to access:
+
+| Option | Description |
+|--------|-------------|
+| Extra Body Fields | A JSON object merged into the Mattermost post body. Use this to set API fields not exposed in the UI (e.g. `priority`, custom `props` keys). UI fields win on conflict for `channel_id`, `message`, and `root_id`. Arrays (`file_ids`, `props.attachments`) are concatenated (JSON entries first). Must be a valid JSON object. |
+| Upload Files Sequentially | When enabled, files are uploaded one at a time in the listed order, preserving display order in Mattermost. Default is parallel upload (faster, order not guaranteed). |
 
 ### Output
 
