@@ -113,7 +113,7 @@ export class Mattermost implements INodeType {
 				description: "Parent post ID for thread replies",
 			},
 			{
-				displayName: "Attachments (optional)",
+				displayName: "Attachments",
 				name: "attachments",
 				type: "fixedCollection",
 				typeOptions: {
@@ -136,7 +136,7 @@ export class Mattermost implements INodeType {
 									"Plain-text fallback for notifications and unsupported clients",
 							},
 							{
-								displayName: "Color",
+								displayName: "Color (optional)",
 								name: "color",
 								type: "string",
 								default: "",
@@ -144,7 +144,7 @@ export class Mattermost implements INodeType {
 									"Left border color: #hex value or good / warning / danger",
 							},
 							{
-								displayName: "Text",
+								displayName: "Text (optional)",
 								name: "text",
 								type: "string",
 								typeOptions: {
@@ -282,18 +282,13 @@ export class Mattermost implements INodeType {
 				],
 			},
 			{
-				displayName: "Files (optional)",
+				displayName: "Files",
 				name: "files",
 				type: "string",
-				typeOptions: {
-					multipleValues: true,
-					multipleValueButtonText: "Add File",
-					maxValue: 10,
-				},
-				default: [],
-				placeholder: "data",
+				default: "",
+				placeholder: "data, attachment, image",
 				description:
-					"n8n binary property name(s) containing the files to upload. Enter the property name (default: data) and click Add File for each file (max 10).",
+					"Comma-separated list of n8n binary property names containing the files to upload (max 10). Example: data, file2, image",
 			},
 		],
 	};
@@ -313,7 +308,10 @@ export class Mattermost implements INodeType {
 				const channelId = this.getNodeParameter("channelId", i) as string;
 				const message = this.getNodeParameter("message", i) as string;
 				const rootId = this.getNodeParameter("rootId", i) as string;
-				const filesParam = this.getNodeParameter("files", i, []) as string[];
+				const filesParam = (this.getNodeParameter("files", i, "") as string)
+					.split(",")
+					.map((s) => s.trim())
+					.filter((s) => s.length > 0);
 				const attachmentsParam = this.getNodeParameter("attachments", i) as {
 					attachment?: Array<{
 						fallback: string;

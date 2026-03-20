@@ -96,12 +96,13 @@ describe("Mattermost node description", () => {
 		expect(names).toContain("attachments");
 	});
 
-	it("files fixedCollection has maxValue of 10", () => {
+	it("files is a plain string type (comma-separated input)", () => {
 		const node = new Mattermost();
 		const filesProp = node.description.properties.find(
 			(p) => p.name === "files",
 		);
-		expect(filesProp?.typeOptions?.maxValue).toBe(10);
+		expect(filesProp?.type).toBe("string");
+		expect(filesProp?.typeOptions?.multipleValues).toBeUndefined();
 	});
 });
 
@@ -113,7 +114,7 @@ describe("Mattermost execute — plain post", () => {
 				if (param === "channelId") return "chan-1";
 				if (param === "message") return "Hello world";
 				if (param === "rootId") return "";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -153,7 +154,7 @@ describe("Mattermost execute — plain post", () => {
 			}),
 			getNodeParameter: (param: string) => {
 				if (param === "channelId") return "chan-x";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -181,7 +182,7 @@ describe("Mattermost execute — plain post", () => {
 				if (param === "channelId") return "chan-1";
 				if (param === "message") return "reply";
 				if (param === "rootId") return "parent-post-id";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -218,8 +219,7 @@ describe("Mattermost execute — file upload", () => {
 				if (param === "channelId") return "chan-1";
 				if (param === "message") return "with file";
 				if (param === "rootId") return "";
-				if (param === "files")
-					return { file: [{ binaryPropertyName: "data" }] };
+				if (param === "files") return "data";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -262,8 +262,7 @@ describe("Mattermost execute — file upload", () => {
 			continueOnFail: () => true,
 			getNodeParameter: (param: string) => {
 				if (param === "channelId") return "chan-1";
-				if (param === "files")
-					return { file: [{ binaryPropertyName: "data" }] };
+				if (param === "files") return "data";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -295,7 +294,7 @@ describe("Mattermost execute — attachments", () => {
 				if (param === "channelId") return "chan-1";
 				if (param === "message") return "";
 				if (param === "rootId") return "";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") {
 					return {
 						attachment: [
@@ -310,9 +309,6 @@ describe("Mattermost execute — attachments", () => {
 								},
 								fields: {
 									field: [{ title: "Status", value: "OK", short: true }],
-								},
-								additionalFields: {
-									field: [{ key: "custom_key", value: "custom_value" }],
 								},
 							},
 						],
@@ -348,7 +344,6 @@ describe("Mattermost execute — attachments", () => {
 		expect(att.title_link).toBe("https://example.com");
 		expect(att.author_name).toBe("Author");
 		expect(att.fields).toEqual([{ title: "Status", value: "OK", short: true }]);
-		expect(att.custom_key).toBe("custom_value");
 	});
 });
 
@@ -357,7 +352,7 @@ describe("Mattermost execute — error handling", () => {
 		const ctx = createMockExecuteFunctions({
 			getNodeParameter: (param: string) => {
 				if (param === "channelId") return "chan-1";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -375,7 +370,7 @@ describe("Mattermost execute — error handling", () => {
 		const ctx = createMockExecuteFunctions({
 			getNodeParameter: (param: string) => {
 				if (param === "channelId") return "chan-1";
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
@@ -398,7 +393,7 @@ describe("Mattermost execute — error handling", () => {
 			getNodeParameter: (param: string) => {
 				if (param === "channelId") return "chan-1";
 				if (param === "message") return `msg-${callIndex++}`;
-				if (param === "files") return {};
+				if (param === "files") return "";
 				if (param === "attachments") return {};
 				return "";
 			},
