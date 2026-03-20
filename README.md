@@ -4,12 +4,14 @@ An [n8n](https://n8n.io/) community node for [Mattermost](https://mattermost.com
 
 ## What's different from the built-in node
 
+The built-in Mattermost node already supports plain posts, thread replies, and rich message attachments. The one gap this node fills is **file upload**.
+
 | Feature | Built-in `n8n-nodes-base` | This node |
 |---------|--------------------------|-----------|
 | Plain posts | ✅ | ✅ |
 | Thread replies | ✅ | ✅ |
+| Rich attachments (props) | ✅ | ✅ |
 | File attachments | ❌ | ✅ Up to 10 files, uploaded in parallel |
-| Rich attachments (props) | ❌ | ✅ Full Slack attachment schema |
 | AI Agent tool | ❌ | ✅ |
 
 ## Installation
