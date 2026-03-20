@@ -1,6 +1,6 @@
 {
   "name": "@a24k/n8n-nodes-mattermost",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "n8n community node for Mattermost with file attachment and rich post support",
   "keywords": [
     "n8n-community-node-package"
