@@ -38,9 +38,13 @@ UI order: Channel ID → Message → Root Post ID → Files → Attachments.
 
 #### Files
 
-A single `string` field. Enter binary property names separated by commas (e.g. `data, image, report`). Max 10 entries.
+A single `string` field. Enter binary property names separated by commas (e.g. `data, image, report`). Max 10 entries (combined with any entries from `extraBodyFields.files`).
 
-Each name refers to an n8n binary data property on the current item. Files are uploaded in parallel via `POST /api/v4/files`; a single `POST /api/v4/posts` call is made after all `file_id`s are collected.
+Each name refers to an n8n binary data property on the current item. Files are uploaded via `POST /api/v4/files`; a single `POST /api/v4/posts` call is made after all `file_id`s are collected.
+
+Upload mode is controlled by the **Advanced Options → Upload Files Sequentially** toggle:
+- Default (`false`): all uploads are issued concurrently via `Promise.all` (faster, order not guaranteed).
+- Sequential (`true`): files are uploaded one at a time in the listed order (UI `files` entries preceded by any `extraBodyFields.files` entries), preserving display order in Mattermost.
 
 When the filename in the binary metadata has no extension, one is appended based on the MIME type (`image/jpeg→jpg`, `image/svg+xml→svg`, `text/plain→txt`; other types use the MIME subtype). `application/octet-stream` is left unchanged.
 
@@ -79,6 +83,41 @@ When the filename in the binary metadata has no extension, one is appended based
 | Value | `string` | Column value (Markdown and @mention supported) |
 | Short | `boolean` | If `true`, renders side-by-side with adjacent fields |
 
+#### Advanced Options (collection)
+
+Added after `Attachments`.
+
+| Option | Name | Type | Default | Description |
+|--------|------|------|---------|-------------|
+| Extra Body Fields | `extraBodyFields` | `json` | `{}` | JSON object merged into the Mattermost post body. Use to set API fields not exposed in the UI (e.g. `priority`, custom `props` keys). |
+| Upload Files Sequentially | `uploadFilesSequentially` | `boolean` | `false` | When enabled, files are uploaded one at a time in the listed order. Use to control display order. Parallel upload (default) is faster but does not guarantee order. |
+
+**Extra Body Fields merge rules:**
+
+The final post body is built in two passes.
+
+*Pass 1 — Extra Body Fields as base:* Start with the parsed JSON object; arbitrary keys are forwarded to the API as-is.
+
+*Pass 2 — UI fields win on conflict:*
+
+| UI field | Post body key | Rule |
+|----------|---------------|------|
+| Channel ID | `channel_id` | UI always wins |
+| Message | `message` | UI wins if non-empty |
+| Root Post ID | `root_id` | UI wins if non-empty |
+
+*Array concatenation:*
+
+| Source | Post body key | Order |
+|--------|---------------|-------|
+| `extraBodyFields.files` (string or array) | *(resolved as binary prop names)* | JSON entries first, UI entries appended |
+| `extraBodyFields.file_ids` | `file_ids` | JSON IDs first, uploaded IDs appended |
+| `extraBodyFields.props.attachments` + UI Attachments | `props.attachments` | JSON entries first, UI entries appended |
+
+Other keys inside `extraBodyFields.props` are deep-merged; keys unique to JSON are preserved.
+
+`extraBodyFields` must be a valid JSON **object**. If it is not an object (e.g. an array or primitive), a `NodeOperationError` is thrown (respecting `continueOnFail`).
+
 ---
 
 ## Output Schema
@@ -105,6 +144,8 @@ When the filename in the binary metadata has no extension, one is appended based
 ```
 
 Mattermost does not provide a public API to delete orphaned files. `uploaded_file_ids` is surfaced so downstream nodes or operators can handle cleanup.
+
+This output also applies when a mid-sequence upload failure occurs in sequential mode. `uploaded_file_ids` contains the IDs of files that were successfully uploaded before the failure.
 
 ---
 

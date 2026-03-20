@@ -292,6 +292,31 @@ export class Mattermost implements INodeType {
 					},
 				],
 			},
+			{
+				displayName: "Advanced Options",
+				name: "advancedOptions",
+				type: "collection",
+				placeholder: "Add Option",
+				default: {},
+				options: [
+					{
+						displayName: "Extra Body Fields",
+						name: "extraBodyFields",
+						type: "json",
+						default: "{}",
+						description:
+							"JSON object merged into the Mattermost post body. Use this to set API fields not available in the UI (e.g. priority, custom props keys).",
+					},
+					{
+						displayName: "Upload Files Sequentially",
+						name: "uploadFilesSequentially",
+						type: "boolean",
+						default: false,
+						description:
+							"When enabled, files are uploaded one at a time in the listed order. Use this to control the display order of files in the Mattermost post. Parallel upload (default) is faster but does not guarantee order.",
+					},
+				],
+			},
 		],
 	};
 
@@ -310,7 +335,7 @@ export class Mattermost implements INodeType {
 				const channelId = this.getNodeParameter("channelId", i) as string;
 				const message = this.getNodeParameter("message", i) as string;
 				const rootId = this.getNodeParameter("rootId", i) as string;
-				const filesParam = (this.getNodeParameter("files", i, "") as string)
+				const uiFilesParam = (this.getNodeParameter("files", i, "") as string)
 					.split(",")
 					.map((s) => s.trim())
 					.filter((s) => s.length > 0);
@@ -337,51 +362,152 @@ export class Mattermost implements INodeType {
 					}>;
 				};
 
-				// Step 1: Upload files in parallel
-				const fileItems = filesParam;
-				const uploadedFileIds: string[] = [];
+				// Parse Advanced Options
+				const advancedOptionsRaw = this.getNodeParameter(
+					"advancedOptions",
+					i,
+					{},
+				) as unknown;
+				const advancedOptions: IDataObject =
+					typeof advancedOptionsRaw === "object" &&
+					advancedOptionsRaw !== null &&
+					!Array.isArray(advancedOptionsRaw)
+						? (advancedOptionsRaw as IDataObject)
+						: {};
 
-				if (fileItems.length > 0) {
-					const uploadResults = await Promise.all(
-						fileItems.map(async (binaryPropertyName) => {
-							const binaryMeta = this.helpers.assertBinaryData(
-								i,
-								binaryPropertyName,
-							);
-							const buffer = await this.helpers.getBinaryDataBuffer(
-								i,
-								binaryPropertyName,
-							);
+				const uploadFilesSequentially =
+					(advancedOptions.uploadFilesSequentially as boolean) ?? false;
 
-							const mimeType =
-								binaryMeta.mimeType ?? "application/octet-stream";
-							const fileName = withExtension(
-								binaryMeta.fileName ?? "file",
-								mimeType,
+				// Parse extraBodyFields
+				let extraBodyFields: IDataObject = {};
+				const rawExtra = advancedOptions.extraBodyFields;
+				if (rawExtra !== undefined && rawExtra !== null && rawExtra !== "") {
+					let parsed: unknown;
+					if (typeof rawExtra === "string" && rawExtra.trim() !== "{}") {
+						try {
+							parsed = JSON.parse(rawExtra as string);
+						} catch {
+							throw new NodeOperationError(
+								this.getNode(),
+								"Extra Body Fields is not valid JSON",
+								{ itemIndex: i },
 							);
-							const formData = new FormData();
-							formData.append(
-								"files",
-								new Blob([buffer], { type: mimeType }),
-								fileName,
+						}
+					} else if (typeof rawExtra !== "string") {
+						parsed = rawExtra;
+					}
+					if (parsed !== undefined) {
+						if (
+							typeof parsed !== "object" ||
+							parsed === null ||
+							Array.isArray(parsed)
+						) {
+							throw new NodeOperationError(
+								this.getNode(),
+								"Extra Body Fields must be a JSON object",
+								{ itemIndex: i },
 							);
-
-							const response = (await this.helpers.httpRequest({
-								method: "POST",
-								url: `${baseUrl}/api/v4/files?channel_id=${encodeURIComponent(channelId)}`,
-								headers: {
-									Authorization: `Bearer ${accessToken}`,
-								},
-								body: formData,
-								json: true,
-								skipSslCertificateValidation: allowUnauthorizedCerts,
-							})) as FileUploadResponse;
-
-							return response.file_infos[0].id;
-						}),
-					);
-					uploadedFileIds.push(...uploadResults);
+						}
+						extraBodyFields = parsed as IDataObject;
+					}
 				}
+
+				// Build file list: extraBodyFields.files first, then UI files (cap at 10)
+				let ebfFilePropNames: string[] = [];
+				const rawEbfFiles = extraBodyFields.files;
+				if (rawEbfFiles !== undefined && rawEbfFiles !== null) {
+					if (typeof rawEbfFiles === "string") {
+						ebfFilePropNames = rawEbfFiles
+							.split(",")
+							.map((s) => s.trim())
+							.filter((s) => s.length > 0);
+					} else if (Array.isArray(rawEbfFiles)) {
+						ebfFilePropNames = (rawEbfFiles as unknown[])
+							.map((f) => String(f).trim())
+							.filter((s) => s.length > 0);
+					}
+				}
+				const allFilePropNames = [...ebfFilePropNames, ...uiFilesParam].slice(
+					0,
+					10,
+				);
+
+				// Helper: upload a single file and return its file_id
+				const uploadSingleFile = async (
+					binaryPropertyName: string,
+				): Promise<string> => {
+					const binaryMeta = this.helpers.assertBinaryData(
+						i,
+						binaryPropertyName,
+					);
+					const buffer = await this.helpers.getBinaryDataBuffer(
+						i,
+						binaryPropertyName,
+					);
+					const mimeType = binaryMeta.mimeType ?? "application/octet-stream";
+					const fileName = withExtension(
+						binaryMeta.fileName ?? "file",
+						mimeType,
+					);
+					const formData = new FormData();
+					formData.append(
+						"files",
+						new Blob([buffer], { type: mimeType }),
+						fileName,
+					);
+					const response = (await this.helpers.httpRequest({
+						method: "POST",
+						url: `${baseUrl}/api/v4/files?channel_id=${encodeURIComponent(channelId)}`,
+						headers: {
+							Authorization: `Bearer ${accessToken}`,
+						},
+						body: formData,
+						json: true,
+						skipSslCertificateValidation: allowUnauthorizedCerts,
+					})) as FileUploadResponse;
+					return response.file_infos[0].id;
+				};
+
+				// Step 1: Upload files (sequential or parallel)
+				const uploadedFileIds: string[] = [];
+				let skipItem = false;
+
+				if (allFilePropNames.length > 0) {
+					if (uploadFilesSequentially) {
+						for (const propName of allFilePropNames) {
+							try {
+								uploadedFileIds.push(await uploadSingleFile(propName));
+							} catch (uploadError) {
+								if (uploadedFileIds.length > 0 && this.continueOnFail()) {
+									returnData.push({
+										json: {
+											error: (uploadError as Error).message,
+											uploaded_file_ids: uploadedFileIds,
+										},
+										pairedItem: { item: i },
+									});
+									skipItem = true;
+									break;
+								}
+								if (uploadedFileIds.length > 0) {
+									throw new NodeOperationError(
+										this.getNode(),
+										`File upload failed after uploading some files. uploaded_file_ids: ${uploadedFileIds.join(", ")}. Original error: ${(uploadError as Error).message}`,
+										{ itemIndex: i },
+									);
+								}
+								throw uploadError;
+							}
+						}
+					} else {
+						const results = await Promise.all(
+							allFilePropNames.map(uploadSingleFile),
+						);
+						uploadedFileIds.push(...results);
+					}
+				}
+
+				if (skipItem) continue;
 
 				// Step 2: Build attachments
 				const attachmentItems = attachmentsParam.attachment ?? [];
@@ -417,17 +543,67 @@ export class Mattermost implements INodeType {
 					return result;
 				});
 
-				// Step 3: Create post
-				const postBody: IDataObject = {
-					channel_id: channelId,
-				};
-				if (message) postBody.message = message;
-				if (rootId) postBody.root_id = rootId;
-				if (uploadedFileIds.length > 0) postBody.file_ids = uploadedFileIds;
-				if (builtAttachments.length > 0) {
-					postBody.props = { attachments: builtAttachments };
+				// Step 3: Build post body
+				// Destructure specially-handled keys from extraBodyFields
+				const {
+					files: _ebfFiles,
+					file_ids: ebfFileIds,
+					props: ebfProps,
+					channel_id: _ebfChannelId,
+					message: ebfMessage,
+					root_id: ebfRootId,
+					...ebfRest
+				} = extraBodyFields;
+
+				// Start with remaining extra fields as base (Pass 1)
+				const postBody: IDataObject = { ...ebfRest };
+
+				// UI wins on channel_id (always)
+				postBody.channel_id = channelId;
+
+				// message: UI wins if non-empty, else JSON value
+				if (message) {
+					postBody.message = message;
+				} else if (ebfMessage) {
+					postBody.message = ebfMessage;
 				}
 
+				// root_id: UI wins if non-empty, else JSON value
+				if (rootId) {
+					postBody.root_id = rootId;
+				} else if (ebfRootId) {
+					postBody.root_id = ebfRootId;
+				}
+
+				// file_ids: JSON first, then uploaded
+				const jsonFileIdsList = Array.isArray(ebfFileIds)
+					? (ebfFileIds as string[])
+					: [];
+				const allFileIds = [...jsonFileIdsList, ...uploadedFileIds];
+				if (allFileIds.length > 0) postBody.file_ids = allFileIds;
+
+				// props: deep merge (JSON props first, UI attachments appended)
+				const ebfPropsObj =
+					typeof ebfProps === "object" &&
+					ebfProps !== null &&
+					!Array.isArray(ebfProps)
+						? (ebfProps as IDataObject)
+						: {};
+				const ebfAttachments = Array.isArray(ebfPropsObj.attachments)
+					? (ebfPropsObj.attachments as Attachment[])
+					: [];
+				const { attachments: _ebfAttachments, ...ebfPropsRest } = ebfPropsObj;
+				const allAttachments = [...ebfAttachments, ...builtAttachments];
+
+				if (allAttachments.length > 0 || Object.keys(ebfPropsRest).length > 0) {
+					const finalProps: IDataObject = { ...(ebfPropsRest as IDataObject) };
+					if (allAttachments.length > 0) {
+						finalProps.attachments = allAttachments;
+					}
+					postBody.props = finalProps;
+				}
+
+				// Step 4: Create post
 				let postResponse: PostResponse;
 				try {
 					postResponse = (await this.helpers.httpRequest({
