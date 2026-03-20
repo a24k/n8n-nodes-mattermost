@@ -129,7 +129,8 @@ export class Mattermost implements INodeType {
 					multipleValues: true,
 				},
 				default: {},
-				description: "Rich message attachments (Slack-compatible format). Click Choose… to add an attachment.",
+				description:
+					"Rich message attachments (Slack-compatible format). Click Choose… to add an attachment.",
 				options: [
 					{
 						name: "attachment",
@@ -253,7 +254,8 @@ export class Mattermost implements INodeType {
 									multipleValues: true,
 								},
 								default: {},
-								description: "Tabular information within the attachment. Click Choose… to add a field.",
+								description:
+									"Tabular information within the attachment. Click Choose… to add a field.",
 								options: [
 									{
 										name: "field",
@@ -332,7 +334,7 @@ export class Mattermost implements INodeType {
 						fields?: {
 							field?: Array<{ title: string; value: string; short: boolean }>;
 						};
-							}>;
+					}>;
 				};
 
 				// Step 1: Upload files in parallel
@@ -351,7 +353,8 @@ export class Mattermost implements INodeType {
 								binaryPropertyName,
 							);
 
-							const mimeType = binaryMeta.mimeType ?? "application/octet-stream";
+							const mimeType =
+								binaryMeta.mimeType ?? "application/octet-stream";
 							const fileName = withExtension(
 								binaryMeta.fileName ?? "file",
 								mimeType,
@@ -410,7 +413,6 @@ export class Mattermost implements INodeType {
 							short: f.short,
 						}));
 					}
-
 
 					return result;
 				});
