@@ -32,8 +32,8 @@ bun run build
 bun run lint
 bun run lint:fix
 
-# Start local n8n instance with this node loaded (hot reload)
-bun run dev
+# Publish (runs lint + build automatically via prepublishOnly)
+npm publish --access public
 
 # Test
 bun test
