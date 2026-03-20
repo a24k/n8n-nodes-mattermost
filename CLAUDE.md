@@ -2,6 +2,15 @@
 
 This file provides guidance for Claude Code when working in this repository.
 
+## Language Policy
+
+All externally visible content must be written in **English**:
+- Commit messages
+- Pull request titles and descriptions
+- Draft and requirements documents under `docs/`
+
+Conversation with the user may be in any language.
+
 ## Project Overview
 
 `@a24k/n8n-nodes-mattermost` is an n8n community node that extends the official Mattermost node with support for file attachments and message attachments (rich posts).
