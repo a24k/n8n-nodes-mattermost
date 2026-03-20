@@ -29,7 +29,6 @@ interface Attachment {
 	thumb_url?: string;
 	footer?: string;
 	footer_icon?: string;
-	ts?: number;
 	fields?: AttachmentField[];
 	[key: string]: unknown;
 }
@@ -208,14 +207,6 @@ export class Mattermost implements INodeType {
 										description: "Footer icon URL",
 									},
 									{
-										displayName: "Timestamp",
-										name: "ts",
-										type: "number",
-										default: 0,
-										description:
-											"Unix timestamp (seconds) displayed in the footer",
-									},
-									{
 										displayName: "Image URL",
 										name: "image_url",
 										type: "string",
@@ -339,7 +330,6 @@ export class Mattermost implements INodeType {
 							thumb_url?: string;
 							footer?: string;
 							footer_icon?: string;
-							ts?: number;
 						};
 						fields?: {
 							field?: Array<{ title: string; value: string; short: boolean }>;
@@ -414,7 +404,6 @@ export class Mattermost implements INodeType {
 					if (opts.thumb_url) result.thumb_url = opts.thumb_url;
 					if (opts.footer) result.footer = opts.footer;
 					if (opts.footer_icon) result.footer_icon = opts.footer_icon;
-					if (opts.ts) result.ts = opts.ts;
 
 					const fieldItems = att.fields?.field ?? [];
 					if (fieldItems.length > 0) {
