@@ -256,6 +256,53 @@ describe("Mattermost execute — file upload", () => {
 		expect(result[0][0].json.file_ids).toEqual(["file-id-1"]);
 	});
 
+	it("uploads multiple files in parallel when comma-separated names given", async () => {
+		const uploadedUrls: string[] = [];
+		let fileIdCounter = 0;
+		const ctx = createMockExecuteFunctions({
+			getNodeParameter: (param: string) => {
+				if (param === "channelId") return "chan-multi";
+				if (param === "message") return "";
+				if (param === "rootId") return "";
+				if (param === "files") return "data, image, report";
+				if (param === "attachments") return {};
+				return "";
+			},
+			assertBinaryData: (_index: number, _prop: string) => ({
+				fileName: `${_prop}.txt`,
+				mimeType: "text/plain",
+			}),
+			httpRequest: async (opts: unknown) => {
+				const o = opts as { url: string; method: string; body?: unknown };
+				if (o.url.includes("/api/v4/files")) {
+					uploadedUrls.push(o.url);
+					return { file_infos: [{ id: `fid-${++fileIdCounter}` }] };
+				}
+				return {
+					id: "post-multi",
+					channel_id: "chan-multi",
+					message: "",
+					file_ids: ["fid-1", "fid-2", "fid-3"],
+					create_at: 0,
+				};
+			},
+		});
+
+		const node = new Mattermost();
+		const result = await node.execute.call(ctx);
+
+		// 3 parallel uploads + 1 post
+		expect(uploadedUrls).toHaveLength(3);
+		expect(uploadedUrls.every((u) => u.includes("channel_id=chan-multi"))).toBe(
+			true,
+		);
+		const postFileIds = result[0][0].json.file_ids as string[];
+		expect(postFileIds).toHaveLength(3);
+		expect(postFileIds).toContain("fid-1");
+		expect(postFileIds).toContain("fid-2");
+		expect(postFileIds).toContain("fid-3");
+	});
+
 	it("surfaces uploaded_file_ids on post failure with continueOnFail", async () => {
 		let _callCount = 0;
 		const ctx = createMockExecuteFunctions({

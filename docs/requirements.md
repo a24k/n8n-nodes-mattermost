@@ -25,18 +25,22 @@ A single **Post Message** operation covers all cases: plain posts, file-attached
 
 #### Top-level
 
+UI order: Channel ID → Message → Root Post ID → Files → Attachments.
+
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | Credential | `mattermostApi` | ✅ | Reuses the credential type from `n8n-nodes-base` |
 | Channel ID | `string` | ✅ | Target channel ID |
 | Message | `string` | — | Post body (Markdown supported) |
 | Root Post ID | `string` | — | Parent post ID for thread replies |
+| Files | `string` | — | Comma-separated binary property names (see below) |
+| Attachments | `fixedCollection` | — | Rich message attachments (see below) |
 
 #### Files
 
-`string[]` with `multipleValues: true`, max 10 entries.
+A single `string` field. Enter binary property names separated by commas (e.g. `data, image, report`). Max 10 entries.
 
-Each entry is the name of an n8n binary data property (e.g. `data`). Files are uploaded in parallel via `POST /api/v4/files`; a single `POST /api/v4/posts` call is made after all `file_id`s are collected.
+Each name refers to an n8n binary data property on the current item. Files are uploaded in parallel via `POST /api/v4/files`; a single `POST /api/v4/posts` call is made after all `file_id`s are collected.
 
 When the filename in the binary metadata has no extension, one is appended based on the MIME type (`image/jpeg→jpg`, `image/svg+xml→svg`, `text/plain→txt`; other types use the MIME subtype). `application/octet-stream` is left unchanged.
 
@@ -49,8 +53,8 @@ When the filename in the binary metadata has no extension, one is appended based
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | Fallback | `string` | ✅ | Plain-text fallback for notifications and unsupported clients |
-| Color | `string` | — | Left border color (`#hex` or `good` / `warning` / `danger`) |
-| Text | `string` | — | Attachment body (Markdown and @mention supported) |
+| Color | `string` | — | Left border color (`#hex` or `good` / `warning` / `danger`). Labeled *(optional)* in UI. |
+| Text | `string` | — | Attachment body (Markdown and @mention supported). Labeled *(optional)* in UI. |
 
 **Attachment Options (collapsed `collection`)**
 

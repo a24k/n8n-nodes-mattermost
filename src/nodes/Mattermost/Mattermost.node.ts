@@ -113,6 +113,15 @@ export class Mattermost implements INodeType {
 				description: "Parent post ID for thread replies",
 			},
 			{
+				displayName: "Files (optional)",
+				name: "files",
+				type: "string",
+				default: "",
+				placeholder: "data, attachment, image",
+				description:
+					"Comma-separated list of n8n binary property names containing the files to upload (max 10). Example: data, file2, image",
+			},
+			{
 				displayName: "Attachments",
 				name: "attachments",
 				type: "fixedCollection",
@@ -280,15 +289,6 @@ export class Mattermost implements INodeType {
 						],
 					},
 				],
-			},
-			{
-				displayName: "Files",
-				name: "files",
-				type: "string",
-				default: "",
-				placeholder: "data, attachment, image",
-				description:
-					"Comma-separated list of n8n binary property names containing the files to upload (max 10). Example: data, file2, image",
 			},
 		],
 	};
