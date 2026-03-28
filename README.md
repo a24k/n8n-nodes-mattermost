@@ -1,5 +1,7 @@
 # @a24k/n8n-nodes-mattermost
 
+[![CI](https://github.com/a24k/n8n-nodes-mattermost/actions/workflows/ci.yml/badge.svg)](https://github.com/a24k/n8n-nodes-mattermost/actions/workflows/ci.yml)
+
 An [n8n](https://n8n.io/) community node for [Mattermost](https://mattermost.com/) that extends the built-in Mattermost node with support for **file attachments** and **rich message attachments** (Slack-compatible).
 
 ## What's different from the built-in node
