@@ -1,6 +1,6 @@
 {
   "name": "@a24k/n8n-nodes-mattermost",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "n8n community node for Mattermost with file attachment and rich post support",
   "keywords": [
     "n8n-community-node-package"
@@ -32,10 +32,13 @@
     ]
   },
   "dependencies": {},
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
     "@types/node": "^24.0.0",
-    "n8n-workflow": "^1.120.10",
+    "n8n-workflow": "^2.13.1",
     "typescript": "^6.0.3"
   }
 }
