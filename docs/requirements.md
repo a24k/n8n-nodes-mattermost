@@ -90,6 +90,7 @@ Added after `Attachments`.
 | Option | Name | Type | Default | Description |
 |--------|------|------|---------|-------------|
 | Extra Body Fields | `extraBodyFields` | `json` | `{}` | JSON object merged into the Mattermost post body. Use to set API fields not exposed in the UI (e.g. `priority`, custom `props` keys). |
+| Channel ID for Test Run | `testChannelId` | `string` | `""` | When set, posts are sent to this channel instead of Channel ID during test runs (manual executions from the editor). Useful for routing test runs to a sandbox channel without modifying the main Channel ID. Corresponds to `$execution.mode === "test"` in n8n expressions. |
 | Upload Files Sequentially | `uploadFilesSequentially` | `boolean` | `false` | When enabled, files are uploaded one at a time in the listed order. Use to control display order. Parallel upload (default) is faster but does not guarantee order. |
 
 **Extra Body Fields merge rules:**
@@ -102,7 +103,7 @@ The final post body is built in two passes.
 
 | UI field | Post body key | Rule |
 |----------|---------------|------|
-| Channel ID | `channel_id` | UI always wins |
+| Channel ID | `channel_id` | UI always wins; overridden by `testChannelId` when non-empty and execution mode is `"manual"` (test run) |
 | Message | `message` | UI wins if non-empty |
 | Root Post ID | `root_id` | UI wins if non-empty |
 

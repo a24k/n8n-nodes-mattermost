@@ -15,6 +15,7 @@ function createMockExecuteFunctions(
     ) => { fileName: string; mimeType: string };
     getBinaryDataBuffer: (index: number, prop: string) => Promise<Buffer>;
     continueOnFail: () => boolean;
+    getMode: () => string;
   }>,
 ): IExecuteFunctions {
   const defaults = {
@@ -41,6 +42,7 @@ function createMockExecuteFunctions(
     }),
     getBinaryDataBuffer: async () => Buffer.from("file content"),
     continueOnFail: () => false,
+    getMode: () => "manual",
   };
 
   const merged = { ...defaults, ...overrides };
@@ -60,6 +62,7 @@ function createMockExecuteFunctions(
       parameters: {},
     }),
     continueOnFail: merged.continueOnFail,
+    getMode: merged.getMode,
     helpers: {
       httpRequest:
         merged.httpRequest as IExecuteFunctions["helpers"]["httpRequest"],
@@ -1096,6 +1099,160 @@ describe("Mattermost execute — error handling", () => {
     const node = new Mattermost();
     const result = await node.execute.call(ctx);
     expect(result[0]).toHaveLength(2);
+  });
+});
+
+describe("Mattermost node description — testChannelId option", () => {
+  it("advancedOptions contains testChannelId option", () => {
+    const node = new Mattermost();
+    const advProp = node.description.properties.find(
+      (p) => p.name === "advancedOptions",
+    );
+    const optionNames = (
+      advProp?.options as Array<{ name: string }> | undefined
+    )?.map((o) => o.name);
+    expect(optionNames).toContain("testChannelId");
+  });
+
+  it("testChannelId option is type string with empty default", () => {
+    const node = new Mattermost();
+    const advProp = node.description.properties.find(
+      (p) => p.name === "advancedOptions",
+    );
+    const opt = (
+      advProp?.options as
+        | Array<{
+            name: string;
+            type: string;
+            default: unknown;
+          }>
+        | undefined
+    )?.find((o) => o.name === "testChannelId");
+    expect(opt?.type).toBe("string");
+    expect(opt?.default).toBe("");
+  });
+});
+
+describe("Mattermost execute — testChannelId routing", () => {
+  it("uses testChannelId for post body when mode is manual", async () => {
+    const bodies: unknown[] = [];
+    const ctx = createMockExecuteFunctions({
+      getMode: () => "manual",
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "prod-chan";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { testChannelId: "test-chan" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        bodies.push((opts as { body: unknown }).body);
+        return {
+          id: "p",
+          channel_id: "test-chan",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect((bodies[0] as Record<string, unknown>).channel_id).toBe("test-chan");
+  });
+
+  it("uses channelId for post body when mode is manual but testChannelId is empty", async () => {
+    const bodies: unknown[] = [];
+    const ctx = createMockExecuteFunctions({
+      getMode: () => "manual",
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "prod-chan";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { testChannelId: "" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        bodies.push((opts as { body: unknown }).body);
+        return {
+          id: "p",
+          channel_id: "prod-chan",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect((bodies[0] as Record<string, unknown>).channel_id).toBe("prod-chan");
+  });
+
+  it("uses channelId for post body when mode is trigger even if testChannelId is set", async () => {
+    const bodies: unknown[] = [];
+    const ctx = createMockExecuteFunctions({
+      getMode: () => "trigger",
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "prod-chan";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { testChannelId: "test-chan" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        bodies.push((opts as { body: unknown }).body);
+        return {
+          id: "p",
+          channel_id: "prod-chan",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect((bodies[0] as Record<string, unknown>).channel_id).toBe("prod-chan");
+  });
+
+  it("uses testChannelId in file upload URL when mode is manual", async () => {
+    const uploadUrls: string[] = [];
+    const ctx = createMockExecuteFunctions({
+      getMode: () => "manual",
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "prod-chan";
+        if (param === "files") return "data";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { testChannelId: "test-chan" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { url: string };
+        if (o.url.includes("/api/v4/files")) {
+          uploadUrls.push(o.url);
+          return { file_infos: [{ id: "fid-1" }] };
+        }
+        return {
+          id: "p",
+          channel_id: "test-chan",
+          message: "",
+          file_ids: ["fid-1"],
+          create_at: 0,
+        };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect(uploadUrls[0]).toContain("channel_id=test-chan");
+    expect(uploadUrls[0]).not.toContain("prod-chan");
   });
 });
 
