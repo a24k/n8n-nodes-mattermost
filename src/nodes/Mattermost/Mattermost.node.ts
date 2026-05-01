@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import {
   type IDataObject,
   type IExecuteFunctions,
@@ -401,8 +401,7 @@ export class Mattermost implements INodeType {
             ? testChannelId
             : channelId;
 
-        const threadGroupKey =
-          (advancedOptions.threadGroupKey as string) ?? "";
+        const threadGroupKey = (advancedOptions.threadGroupKey as string) ?? "";
 
         // Parse extraBodyFields
         let extraBodyFields: IDataObject = {};

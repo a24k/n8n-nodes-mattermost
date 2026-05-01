@@ -1,5 +1,5 @@
-import { createHash } from "crypto";
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import type { IExecuteFunctions, INodeExecutionData } from "n8n-workflow";
 import { Mattermost } from "../src/nodes/Mattermost/Mattermost.node";
 
@@ -1285,7 +1285,9 @@ describe("Mattermost node description — threadGroupKey option", () => {
       (p) => p.name === "advancedOptions",
     );
     const opt = (
-      advProp?.options as Array<{ name: string; type: string; default: unknown }> | undefined
+      advProp?.options as
+        | Array<{ name: string; type: string; default: unknown }>
+        | undefined
     )?.find((o) => o.name === "threadGroupKey");
     expect(opt?.type).toBe("string");
     expect(opt?.default).toBe("");
@@ -1306,7 +1308,13 @@ describe("Mattermost execute — Thread Group Key", () => {
       httpRequest: async (opts: unknown) => {
         const o = opts as { url: string };
         urls.push(o.url);
-        return { id: "p1", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+        return {
+          id: "p1",
+          channel_id: "chan-1",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
       },
     });
 
@@ -1334,7 +1342,13 @@ describe("Mattermost execute — Thread Group Key", () => {
         const o = opts as { url: string; body?: unknown };
         urls.push(o.url);
         bodies.push(o.body);
-        return { id: "p1", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+        return {
+          id: "p1",
+          channel_id: "chan-1",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
       },
     });
 
@@ -1343,7 +1357,9 @@ describe("Mattermost execute — Thread Group Key", () => {
 
     expect(urls).toHaveLength(1);
     expect(urls[0]).toMatch(/\/api\/v4\/posts$/);
-    expect((bodies[0] as Record<string, unknown>).root_id).toBe("explicit-root-id");
+    expect((bodies[0] as Record<string, unknown>).root_id).toBe(
+      "explicit-root-id",
+    );
   });
 
   it("Thread Group Key, no existing mapping (404): creates new post, saves preference, output has thread fields", async () => {
@@ -1357,7 +1373,8 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (param === "rootId") return "";
         if (param === "files") return "";
         if (param === "attachments") return {};
-        if (param === "advancedOptions") return { threadGroupKey: "incident-42" };
+        if (param === "advancedOptions")
+          return { threadGroupKey: "incident-42" };
         return "";
       },
       httpRequest: async (opts: unknown) => {
@@ -1369,7 +1386,13 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (o.method === "PUT" && o.url.includes("preferences")) {
           return {};
         }
-        return { id: "new-post-id", channel_id: "chan-1", message: "first post", file_ids: [], create_at: 111 };
+        return {
+          id: "new-post-id",
+          channel_id: "chan-1",
+          message: "first post",
+          file_ids: [],
+          create_at: 111,
+        };
       },
     });
 
@@ -1379,9 +1402,13 @@ describe("Mattermost execute — Thread Group Key", () => {
     // GET preferences, POST posts, PUT preferences
     expect(requests).toHaveLength(3);
     expect(requests[0].method).toBe("GET");
-    expect(requests[0].url).toBe(`${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/${hash}`);
+    expect(requests[0].url).toBe(
+      `${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/${hash}`,
+    );
     expect(requests[1].method).toBe("POST");
-    expect((requests[1].body as Record<string, unknown>).root_id).toBeUndefined();
+    expect(
+      (requests[1].body as Record<string, unknown>).root_id,
+    ).toBeUndefined();
     expect(requests[2].method).toBe("PUT");
     expect(requests[2].url).toBe(`${BASE_URL}/api/v4/users/me/preferences`);
     const prefBody = requests[2].body as Array<Record<string, unknown>>;
@@ -1407,16 +1434,28 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (param === "rootId") return "";
         if (param === "files") return "";
         if (param === "attachments") return {};
-        if (param === "advancedOptions") return { threadGroupKey: "incident-42" };
+        if (param === "advancedOptions")
+          return { threadGroupKey: "incident-42" };
         return "";
       },
       httpRequest: async (opts: unknown) => {
         const o = opts as { method: string; url: string; body?: unknown };
         requests.push({ method: o.method, url: o.url, body: o.body });
         if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
-          return { user_id: "bot-user", category: PREF_CATEGORY, name: hash, value: "root-post-id" };
+          return {
+            user_id: "bot-user",
+            category: PREF_CATEGORY,
+            name: hash,
+            value: "root-post-id",
+          };
         }
-        return { id: "reply-post-id", channel_id: "chan-1", message: "reply post", file_ids: [], create_at: 222 };
+        return {
+          id: "reply-post-id",
+          channel_id: "chan-1",
+          message: "reply post",
+          file_ids: [],
+          create_at: 222,
+        };
       },
     });
 
@@ -1427,7 +1466,9 @@ describe("Mattermost execute — Thread Group Key", () => {
     expect(requests).toHaveLength(2);
     expect(requests[0].method).toBe("GET");
     expect(requests[1].method).toBe("POST");
-    expect((requests[1].body as Record<string, unknown>).root_id).toBe("root-post-id");
+    expect((requests[1].body as Record<string, unknown>).root_id).toBe(
+      "root-post-id",
+    );
 
     expect(result[0][0].json).toMatchObject({
       post_id: "reply-post-id",
@@ -1450,9 +1491,17 @@ describe("Mattermost execute — Thread Group Key", () => {
       httpRequest: async (opts: unknown) => {
         const o = opts as { method: string; url: string };
         if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
-          throw Object.assign(new Error("Internal Server Error"), { httpCode: "500" });
+          throw Object.assign(new Error("Internal Server Error"), {
+            httpCode: "500",
+          });
         }
-        return { id: "p", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+        return {
+          id: "p",
+          channel_id: "chan-1",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
       },
     });
 
@@ -1479,7 +1528,13 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (o.method === "PUT" && o.url.includes("preferences")) {
           throw new Error("Preferences write failed");
         }
-        return { id: "new-post-id", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+        return {
+          id: "new-post-id",
+          channel_id: "chan-1",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
       },
     });
 
@@ -1505,7 +1560,8 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (param === "rootId") return "";
         if (param === "files") return "";
         if (param === "attachments") return {};
-        if (param === "advancedOptions") return { testChannelId: "test-chan", threadGroupKey: "my-key" };
+        if (param === "advancedOptions")
+          return { testChannelId: "test-chan", threadGroupKey: "my-key" };
         return "";
       },
       httpRequest: async (opts: unknown) => {
@@ -1515,7 +1571,13 @@ describe("Mattermost execute — Thread Group Key", () => {
           throw Object.assign(new Error("Not Found"), { httpCode: "404" });
         }
         if (o.method === "PUT") return {};
-        return { id: "p", channel_id: "test-chan", message: "", file_ids: [], create_at: 0 };
+        return {
+          id: "p",
+          channel_id: "test-chan",
+          message: "",
+          file_ids: [],
+          create_at: 0,
+        };
       },
     });
 
