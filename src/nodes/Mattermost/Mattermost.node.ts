@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   type IDataObject,
   type IExecuteFunctions,
@@ -62,6 +63,29 @@ function withExtension(fileName: string, mimeType: string): string {
   if (mimeType === "application/octet-stream") return fileName;
   const ext = MIME_EXT_OVERRIDES[mimeType] ?? mimeType.split("/")[1];
   return ext ? `${fileName}.${ext}` : fileName;
+}
+
+// SHA-256 of "${channelId}:${key}", first 20 bytes encoded as lowercase base32 (RFC 4648).
+// Alphabet [a-z2-7] satisfies Mattermost's preference_name regex ^[a-z0-9]+([a-z\-\_0-9]+|(__)?)[a-z0-9]+$
+// 20 bytes × 8 bits / 5 bits per char = 32 chars = 160 bits of entropy.
+function threadPrefName(channelId: string, key: string): string {
+  const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+  const bytes = createHash("sha256")
+    .update(`${channelId}:${key}`)
+    .digest()
+    .subarray(0, 20);
+  let result = "";
+  let bits = 0;
+  let value = 0;
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      result += BASE32[(value >> bits) & 31];
+    }
+  }
+  return result;
 }
 
 export class Mattermost implements INodeType {
@@ -308,6 +332,14 @@ export class Mattermost implements INodeType {
               "JSON object merged into the Mattermost post body. Use this to set API fields not available in the UI (e.g. priority, custom props keys).",
           },
           {
+            displayName: "Thread Group Key",
+            name: "threadGroupKey",
+            type: "string",
+            default: "",
+            description:
+              "Logical identifier for a thread group. Posts with the same Thread Group Key and Channel ID are automatically linked as a Mattermost thread. Ignored if Root Post ID is also set.",
+          },
+          {
             displayName: "Channel ID for Test Run",
             name: "testChannelId",
             type: "string",
@@ -391,6 +423,8 @@ export class Mattermost implements INodeType {
           testChannelId && this.getMode() === "manual"
             ? testChannelId
             : channelId;
+
+        const threadGroupKey = (advancedOptions.threadGroupKey as string) ?? "";
 
         // Parse extraBodyFields
         let extraBodyFields: IDataObject = {};
@@ -523,7 +557,47 @@ export class Mattermost implements INodeType {
 
         if (skipItem) continue;
 
-        // Step 2: Build attachments
+        // Step 2: Resolve thread group key → root_id via Mattermost Preferences API
+        const PREF_CATEGORY = "n8n_nodes_mattermost_threadmap";
+        let threadRootPostId: string | null = null;
+        const useThreadGroupKey = threadGroupKey && !rootId;
+
+        if (useThreadGroupKey) {
+          const prefName = threadPrefName(effectiveChannelId, threadGroupKey);
+          const prefUrl = `${baseUrl}/api/v4/users/me/preferences/${PREF_CATEGORY}/name/${prefName}`;
+          try {
+            const pref = (await this.helpers.httpRequest({
+              method: "GET",
+              url: prefUrl,
+              headers: { Authorization: `Bearer ${accessToken}` },
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            })) as { value: string };
+            threadRootPostId = pref.value;
+          } catch (prefErr) {
+            const e = prefErr as Record<string, unknown>;
+            // n8n may throw a NodeApiError (context.data) or a raw AxiosError (response.data)
+            const responseData = ((
+              e.context as Record<string, unknown> | undefined
+            )?.data ??
+              (e.response as Record<string, unknown> | undefined)?.data) as
+              | Record<string, unknown>
+              | undefined;
+            const isNotFound =
+              e.httpCode === "404" ||
+              (e.response as Record<string, unknown> | undefined)?.status ===
+                404 ||
+              responseData?.id === "app.preference.get.app_error";
+            if (!isNotFound)
+              throw new NodeOperationError(
+                this.getNode(),
+                (prefErr as Error).message,
+                { itemIndex: i },
+              );
+          }
+        }
+
+        // Step 3: Build attachments
         const attachmentItems = attachmentsParam.attachment ?? [];
         const builtAttachments: Attachment[] = attachmentItems.map((att) => {
           const result: Attachment = {
@@ -582,9 +656,11 @@ export class Mattermost implements INodeType {
           postBody.message = ebfMessage;
         }
 
-        // root_id: UI wins if non-empty, else JSON value
+        // root_id: UI wins if non-empty, else thread group key lookup, else JSON value
         if (rootId) {
           postBody.root_id = rootId;
+        } else if (threadRootPostId) {
+          postBody.root_id = threadRootPostId;
         } else if (ebfRootId) {
           postBody.root_id = ebfRootId;
         }
@@ -653,14 +729,55 @@ export class Mattermost implements INodeType {
           throw postError;
         }
 
+        // Step 5: Save thread mapping when a new root post was created
+        if (useThreadGroupKey && threadRootPostId === null) {
+          const prefName = threadPrefName(effectiveChannelId, threadGroupKey);
+          try {
+            const me = (await this.helpers.httpRequest({
+              method: "GET",
+              url: `${baseUrl}/api/v4/users/me`,
+              headers: { Authorization: `Bearer ${accessToken}` },
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            })) as { id: string };
+            await this.helpers.httpRequest({
+              method: "PUT",
+              url: `${baseUrl}/api/v4/users/me/preferences`,
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: [
+                {
+                  user_id: me.id,
+                  category: PREF_CATEGORY,
+                  name: prefName,
+                  value: postResponse.id,
+                },
+              ] as unknown as Record<string, unknown>,
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            });
+          } catch {
+            // Silently ignored: post succeeded but mapping not saved.
+            // Next invocation with the same key will create a new thread.
+          }
+        }
+
+        const output: IDataObject = {
+          post_id: postResponse.id,
+          channel_id: postResponse.channel_id,
+          message: postResponse.message,
+          file_ids: postResponse.file_ids ?? [],
+          create_at: postResponse.create_at,
+        };
+        if (useThreadGroupKey) {
+          output.thread_group_key = threadGroupKey;
+          output.thread_root_post_id = threadRootPostId;
+        }
+
         returnData.push({
-          json: {
-            post_id: postResponse.id,
-            channel_id: postResponse.channel_id,
-            message: postResponse.message,
-            file_ids: postResponse.file_ids ?? [],
-            create_at: postResponse.create_at,
-          },
+          json: output,
           pairedItem: { item: i },
         });
       } catch (error) {

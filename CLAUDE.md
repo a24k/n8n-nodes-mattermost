@@ -91,6 +91,16 @@ Use Mattermost API v4 only.
 - Body: `{ channel_id, message, file_ids, root_id, props: { attachments } }`
 - All fields except `channel_id` are optional
 
+**Preferences API (Thread Group Key backing store)**
+- Look up: `GET /api/v4/users/me/preferences/{category}/name/{name}`
+  - Returns the preference object `{ user_id, category, name, value }` on hit
+  - Returns HTTP **400** with `id: "app.preference.get.app_error"` when not found (NOT 404 or 200+`[]`)
+- Store: `PUT /api/v4/users/me/preferences` — body is an array of preference objects
+  - `user_id` in each object **must be the bot's real user ID** (fetch via `GET /api/v4/users/me`); the literal `"me"` fails `IsValidId()` and causes a silent 400
+- Category: `n8n_nodes_mattermost_threadmap`
+- Name: SHA-256(`"${effectiveChannelId}:${threadGroupKey}"`) → first 20 bytes → lowercase base32 (RFC 4648) → 32 chars
+  - Alphabet `[a-z2-7]` satisfies Mattermost's `preference_name` regex; base64url (uppercase) does not
+
 ### File Upload Flow
 1. For each file item, read n8n binary data:
    - `const binaryMeta = this.helpers.assertBinaryData(itemIndex, binaryPropertyName)` → filename, mimeType

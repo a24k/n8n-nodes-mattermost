@@ -15,6 +15,7 @@ The built-in Mattermost node already supports plain posts, thread replies, and r
 | Rich attachments (props) | ✅ | ✅ |
 | File attachments | ❌ | ✅ Up to 10 files (parallel or sequential) |
 | Extra body fields | ❌ | ✅ Merge arbitrary JSON into the post body |
+| Thread Group Key | ❌ | ✅ Auto-thread posts by logical key |
 | AI Agent tool | ❌ | ✅ |
 
 ## Installation
@@ -121,6 +122,7 @@ Expand **Advanced Options** to access:
 | Option | Description |
 |--------|-------------|
 | Extra Body Fields | A JSON object merged into the Mattermost post body. Use this to set API fields not exposed in the UI (e.g. `priority`, custom `props` keys). UI fields win on conflict for `channel_id`, `message`, and `root_id`. Arrays (`file_ids`, `props.attachments`) are concatenated (JSON entries first). Must be a valid JSON object. |
+| Thread Group Key | Logical identifier for a thread group. Posts with the same Thread Group Key and Channel ID are automatically linked as a Mattermost thread — no separate lookup node required. Ignored if Root Post ID is also set. |
 | Channel ID for Test Run | When set, posts are sent to this channel instead of **Channel ID** during test runs (manual executions from the editor — equivalent to `$execution.mode === "test"`). Useful for routing test runs to a sandbox channel without modifying the main Channel ID. |
 | Upload Files Sequentially | When enabled, files are uploaded one at a time in the listed order, preserving display order in Mattermost. Default is parallel upload (faster, order not guaranteed). |
 
@@ -137,6 +139,22 @@ On success:
   "create_at": 1234567890000
 }
 ```
+
+When **Thread Group Key** is set, two additional fields are included:
+
+```json
+{
+  "post_id": "abc123",
+  "channel_id": "xyz456",
+  "message": "Hello!",
+  "file_ids": [],
+  "create_at": 1234567890000,
+  "thread_group_key": "my-incident-123",
+  "thread_root_post_id": null
+}
+```
+
+`thread_root_post_id` is `null` for a new root post and the root post ID for thread replies.
 
 ### Error handling
 
