@@ -65,6 +65,29 @@ function withExtension(fileName: string, mimeType: string): string {
   return ext ? `${fileName}.${ext}` : fileName;
 }
 
+// SHA-256 of "${channelId}:${key}", first 20 bytes encoded as lowercase base32 (RFC 4648).
+// Alphabet [a-z2-7] satisfies Mattermost's preference_name regex ^[a-z0-9]+([a-z\-\_0-9]+|(__)?)[a-z0-9]+$
+// 20 bytes × 8 bits / 5 bits per char = 32 chars = 160 bits of entropy.
+function threadPrefName(channelId: string, key: string): string {
+  const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+  const bytes = createHash("sha256")
+    .update(`${channelId}:${key}`)
+    .digest()
+    .subarray(0, 20);
+  let result = "";
+  let bits = 0;
+  let value = 0;
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      result += BASE32[(value >> bits) & 31];
+    }
+  }
+  return result;
+}
+
 export class Mattermost implements INodeType {
   description: INodeTypeDescription = {
     displayName: "Mattermost @a24k",
@@ -540,10 +563,7 @@ export class Mattermost implements INodeType {
         const useThreadGroupKey = threadGroupKey && !rootId;
 
         if (useThreadGroupKey) {
-          const prefName = createHash("sha256")
-            .update(`${effectiveChannelId}:${threadGroupKey}`)
-            .digest("base64url")
-            .slice(0, 32);
+          const prefName = threadPrefName(effectiveChannelId, threadGroupKey);
           const prefUrl = `${baseUrl}/api/v4/users/me/preferences/${PREF_CATEGORY}/name/${prefName}`;
           try {
             const pref = (await this.helpers.httpRequest({
@@ -556,13 +576,7 @@ export class Mattermost implements INodeType {
             threadRootPostId = pref.value;
           } catch (prefErr) {
             const httpCode = (prefErr as Record<string, unknown>).httpCode;
-            if (httpCode !== "404") {
-              throw new NodeOperationError(
-                this.getNode(),
-                `[diag:pref-get] ${(prefErr as Error).message} — url: ${prefUrl}`,
-                { itemIndex: i },
-              );
-            }
+            if (httpCode !== "404") throw prefErr;
           }
         }
 
@@ -695,19 +709,12 @@ export class Mattermost implements INodeType {
               { itemIndex: i },
             );
           }
-          throw new NodeOperationError(
-            this.getNode(),
-            `[diag:post] ${(postError as Error).message}`,
-            { itemIndex: i },
-          );
+          throw postError;
         }
 
         // Step 5: Save thread mapping when a new root post was created
         if (useThreadGroupKey && threadRootPostId === null) {
-          const prefName = createHash("sha256")
-            .update(`${effectiveChannelId}:${threadGroupKey}`)
-            .digest("base64url")
-            .slice(0, 32);
+          const prefName = threadPrefName(effectiveChannelId, threadGroupKey);
           try {
             await this.helpers.httpRequest({
               method: "PUT",

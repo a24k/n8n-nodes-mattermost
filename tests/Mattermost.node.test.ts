@@ -1069,7 +1069,7 @@ describe("Mattermost execute — error handling", () => {
 
     const node = new Mattermost();
     const result = await node.execute.call(ctx);
-    expect(result[0][0].json.error).toContain("Upstream error");
+    expect(result[0][0].json.error).toBe("Upstream error");
   });
 
   it("processes multiple items independently", async () => {
@@ -1258,10 +1258,23 @@ describe("Mattermost execute — testChannelId routing", () => {
 });
 
 function threadHash(channelId: string, key: string): string {
-  return createHash("sha256")
+  const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+  const bytes = createHash("sha256")
     .update(`${channelId}:${key}`)
-    .digest("base64url")
-    .slice(0, 32);
+    .digest()
+    .subarray(0, 20);
+  let result = "";
+  let bits = 0;
+  let value = 0;
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      result += BASE32[(value >> bits) & 31];
+    }
+  }
+  return result;
 }
 
 const PREF_CATEGORY = "n8n_nodes_mattermost_threadmap";
