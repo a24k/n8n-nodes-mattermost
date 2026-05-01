@@ -1375,7 +1375,7 @@ describe("Mattermost execute — Thread Group Key", () => {
     );
   });
 
-  it("Thread Group Key, no existing mapping (404): creates new post, saves preference, output has thread fields", async () => {
+  it("Thread Group Key, no existing mapping (404 fallback): creates new post, saves preference, output has thread fields", async () => {
     const hash = threadHash("chan-1", "incident-42");
     const requests: Array<{ method: string; url: string; body?: unknown }> = [];
 
@@ -1487,6 +1487,60 @@ describe("Mattermost execute — Thread Group Key", () => {
       post_id: "reply-post-id",
       thread_group_key: "incident-42",
       thread_root_post_id: "root-post-id",
+    });
+  });
+
+  it("Thread Group Key, no existing mapping (400 app.preference.get.app_error): treated as not found, creates new post", async () => {
+    const hash = threadHash("chan-1", "incident-42");
+    const requests: Array<{ method: string; url: string; body?: unknown }> = [];
+
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "message") return "first post";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions")
+          return { threadGroupKey: "incident-42" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string; body?: unknown };
+        requests.push({ method: o.method, url: o.url, body: o.body });
+        if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
+          throw Object.assign(new Error("Bad Request"), {
+            httpCode: "400",
+            context: { data: { id: "app.preference.get.app_error" } },
+          });
+        }
+        if (o.method === "PUT" && o.url.includes("preferences")) {
+          return {};
+        }
+        return {
+          id: "new-post-id",
+          channel_id: "chan-1",
+          message: "first post",
+          file_ids: [],
+          create_at: 111,
+        };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+
+    // GET preferences, POST post, PUT preference
+    expect(requests).toHaveLength(3);
+    expect(requests[0].method).toBe("GET");
+    expect(requests[0].url).toContain(hash);
+    expect(requests[1].method).toBe("POST");
+    expect(requests[2].method).toBe("PUT");
+
+    expect(result[0][0].json).toMatchObject({
+      post_id: "new-post-id",
+      thread_group_key: "incident-42",
+      thread_root_post_id: null,
     });
   });
 
