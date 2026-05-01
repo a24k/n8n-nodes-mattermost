@@ -708,6 +708,16 @@ export class Mattermost implements INodeType {
             skipSslCertificateValidation: allowUnauthorizedCerts,
           })) as PostResponse;
         } catch (postError) {
+          const postErrBody = JSON.stringify(
+            (postError as Record<string, unknown>).response
+              ? (
+                  (postError as Record<string, unknown>).response as Record<
+                    string,
+                    unknown
+                  >
+                ).data
+              : null,
+          );
           // Post failed after successful file uploads — surface file IDs for cleanup
           if (uploadedFileIds.length > 0) {
             if (this.continueOnFail()) {
@@ -722,11 +732,15 @@ export class Mattermost implements INodeType {
             }
             throw new NodeOperationError(
               this.getNode(),
-              `Post failed after uploading files. uploaded_file_ids: ${uploadedFileIds.join(", ")}. Original error: ${(postError as Error).message}`,
+              `Post failed after uploading files. uploaded_file_ids: ${uploadedFileIds.join(", ")}. Original error: ${(postError as Error).message} — response: ${postErrBody}`,
               { itemIndex: i },
             );
           }
-          throw postError;
+          throw new NodeOperationError(
+            this.getNode(),
+            `${(postError as Error).message} — response: ${postErrBody}`,
+            { itemIndex: i },
+          );
         }
 
         // Step 5: Save thread mapping when a new root post was created
