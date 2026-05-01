@@ -1,4 +1,4 @@
-# Draft: Channel ID for Test Execution
+# Draft: Channel ID for Test Run
 
 ## Motivation
 
@@ -18,7 +18,7 @@ Add a new option to the existing **Advanced Options** collection, placed before 
 
 | Option | Name | Type | Default | Description |
 |--------|------|------|---------|-------------|
-| Channel ID for Test Execution | `testChannelId` | `string` | `""` | When set, posts are sent to this channel instead of Channel ID during test executions. Useful for routing test runs to a sandbox channel without modifying the main Channel ID. |
+| Channel ID for Test Run | `testChannelId` | `string` | `""` | When set, posts are sent to this channel instead of Channel ID during test executions. Useful for routing test runs to a sandbox channel without modifying the main Channel ID. |
 
 ### Behavior
 

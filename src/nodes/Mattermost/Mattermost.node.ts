@@ -308,7 +308,7 @@ export class Mattermost implements INodeType {
               "JSON object merged into the Mattermost post body. Use this to set API fields not available in the UI (e.g. priority, custom props keys).",
           },
           {
-            displayName: "Channel ID for Test Execution",
+            displayName: "Channel ID for Test Run",
             name: "testChannelId",
             type: "string",
             default: "",
