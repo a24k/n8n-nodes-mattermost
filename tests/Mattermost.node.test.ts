@@ -1396,6 +1396,9 @@ describe("Mattermost execute — Thread Group Key", () => {
         if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
           throw Object.assign(new Error("Not Found"), { httpCode: "404" });
         }
+        if (o.method === "GET" && o.url.endsWith("/api/v4/users/me")) {
+          return { id: "bot-user-id" };
+        }
         if (o.method === "PUT" && o.url.includes("preferences")) {
           return {};
         }
@@ -1412,8 +1415,8 @@ describe("Mattermost execute — Thread Group Key", () => {
     const node = new Mattermost();
     const result = await node.execute.call(ctx);
 
-    // GET preferences, POST posts, PUT preferences
-    expect(requests).toHaveLength(3);
+    // GET preferences, POST post, GET users/me, PUT preferences
+    expect(requests).toHaveLength(4);
     expect(requests[0].method).toBe("GET");
     expect(requests[0].url).toBe(
       `${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/name/${hash}`,
@@ -1422,9 +1425,12 @@ describe("Mattermost execute — Thread Group Key", () => {
     expect(
       (requests[1].body as Record<string, unknown>).root_id,
     ).toBeUndefined();
-    expect(requests[2].method).toBe("PUT");
-    expect(requests[2].url).toBe(`${BASE_URL}/api/v4/users/me/preferences`);
-    const prefBody = requests[2].body as Array<Record<string, unknown>>;
+    expect(requests[2].method).toBe("GET");
+    expect(requests[2].url).toBe(`${BASE_URL}/api/v4/users/me`);
+    expect(requests[3].method).toBe("PUT");
+    expect(requests[3].url).toBe(`${BASE_URL}/api/v4/users/me/preferences`);
+    const prefBody = requests[3].body as Array<Record<string, unknown>>;
+    expect(prefBody[0].user_id).toBe("bot-user-id");
     expect(prefBody[0].category).toBe(PREF_CATEGORY);
     expect(prefBody[0].name).toBe(hash);
     expect(prefBody[0].value).toBe("new-post-id");
@@ -1510,12 +1516,18 @@ describe("Mattermost execute — Thread Group Key", () => {
         requests.push({ method: o.method, url: o.url, body: o.body });
         if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
           // Simulate AxiosError shape (response.data) — what n8n httpRequest actually throws
-          throw Object.assign(new Error("Request failed with status code 400"), {
-            response: {
-              status: 400,
-              data: { id: "app.preference.get.app_error" },
+          throw Object.assign(
+            new Error("Request failed with status code 400"),
+            {
+              response: {
+                status: 400,
+                data: { id: "app.preference.get.app_error" },
+              },
             },
-          });
+          );
+        }
+        if (o.method === "GET" && o.url.endsWith("/api/v4/users/me")) {
+          return { id: "bot-user-id" };
         }
         if (o.method === "PUT" && o.url.includes("preferences")) {
           return {};
@@ -1533,12 +1545,14 @@ describe("Mattermost execute — Thread Group Key", () => {
     const node = new Mattermost();
     const result = await node.execute.call(ctx);
 
-    // GET preferences, POST post, PUT preference
-    expect(requests).toHaveLength(3);
+    // GET preferences, POST post, GET users/me, PUT preference
+    expect(requests).toHaveLength(4);
     expect(requests[0].method).toBe("GET");
     expect(requests[0].url).toContain(hash);
     expect(requests[1].method).toBe("POST");
-    expect(requests[2].method).toBe("PUT");
+    expect(requests[2].method).toBe("GET");
+    expect(requests[2].url).toContain("/api/v4/users/me");
+    expect(requests[3].method).toBe("PUT");
 
     expect(result[0][0].json).toMatchObject({
       post_id: "new-post-id",

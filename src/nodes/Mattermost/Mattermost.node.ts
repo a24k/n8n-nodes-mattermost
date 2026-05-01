@@ -577,10 +577,12 @@ export class Mattermost implements INodeType {
           } catch (prefErr) {
             const e = prefErr as Record<string, unknown>;
             // n8n may throw a NodeApiError (context.data) or a raw AxiosError (response.data)
-            const responseData = (
-              (e.context as Record<string, unknown> | undefined)?.data ??
-              (e.response as Record<string, unknown> | undefined)?.data
-            ) as Record<string, unknown> | undefined;
+            const responseData = ((
+              e.context as Record<string, unknown> | undefined
+            )?.data ??
+              (e.response as Record<string, unknown> | undefined)?.data) as
+              | Record<string, unknown>
+              | undefined;
             const isNotFound =
               e.httpCode === "404" ||
               (e.response as Record<string, unknown> | undefined)?.status ===
@@ -731,6 +733,13 @@ export class Mattermost implements INodeType {
         if (useThreadGroupKey && threadRootPostId === null) {
           const prefName = threadPrefName(effectiveChannelId, threadGroupKey);
           try {
+            const me = (await this.helpers.httpRequest({
+              method: "GET",
+              url: `${baseUrl}/api/v4/users/me`,
+              headers: { Authorization: `Bearer ${accessToken}` },
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            })) as { id: string };
             await this.helpers.httpRequest({
               method: "PUT",
               url: `${baseUrl}/api/v4/users/me/preferences`,
@@ -740,7 +749,7 @@ export class Mattermost implements INodeType {
               },
               body: [
                 {
-                  user_id: "me",
+                  user_id: me.id,
                   category: PREF_CATEGORY,
                   name: prefName,
                   value: postResponse.id,
