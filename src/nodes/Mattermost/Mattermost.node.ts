@@ -308,6 +308,14 @@ export class Mattermost implements INodeType {
               "JSON object merged into the Mattermost post body. Use this to set API fields not available in the UI (e.g. priority, custom props keys).",
           },
           {
+            displayName: "Channel ID for Test Execution",
+            name: "testChannelId",
+            type: "string",
+            default: "",
+            description:
+              "When set, posts are sent to this channel instead of Channel ID during test executions. Useful for routing test runs to a sandbox channel without modifying the main Channel ID.",
+          },
+          {
             displayName: "Upload Files Sequentially",
             name: "uploadFilesSequentially",
             type: "boolean",
@@ -377,6 +385,12 @@ export class Mattermost implements INodeType {
 
         const uploadFilesSequentially =
           (advancedOptions.uploadFilesSequentially as boolean) ?? false;
+
+        const testChannelId = (advancedOptions.testChannelId as string) ?? "";
+        const effectiveChannelId =
+          testChannelId && this.getMode() === "manual"
+            ? testChannelId
+            : channelId;
 
         // Parse extraBodyFields
         let extraBodyFields: IDataObject = {};
@@ -457,7 +471,7 @@ export class Mattermost implements INodeType {
           );
           const response = (await this.helpers.httpRequest({
             method: "POST",
-            url: `${baseUrl}/api/v4/files?channel_id=${encodeURIComponent(channelId)}`,
+            url: `${baseUrl}/api/v4/files?channel_id=${encodeURIComponent(effectiveChannelId)}`,
             headers: {
               Authorization: `Bearer ${accessToken}`,
             },
@@ -558,8 +572,8 @@ export class Mattermost implements INodeType {
         // Start with remaining extra fields as base (Pass 1)
         const postBody: IDataObject = { ...ebfRest };
 
-        // UI wins on channel_id (always)
-        postBody.channel_id = channelId;
+        // UI wins on channel_id (always); testChannelId overrides when in test mode
+        postBody.channel_id = effectiveChannelId;
 
         // message: UI wins if non-empty, else JSON value
         if (message) {
