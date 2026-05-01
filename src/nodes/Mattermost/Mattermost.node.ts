@@ -575,15 +575,17 @@ export class Mattermost implements INodeType {
             })) as { value: string };
             threadRootPostId = pref.value;
           } catch (prefErr) {
-            const httpCode = (prefErr as Record<string, unknown>).httpCode;
-            const errId = (
-              (prefErr as Record<string, unknown>).context as
-                | Record<string, unknown>
-                | undefined
-            )?.data as Record<string, unknown> | undefined;
+            const e = prefErr as Record<string, unknown>;
+            // n8n may throw a NodeApiError (context.data) or a raw AxiosError (response.data)
+            const responseData = (
+              (e.context as Record<string, unknown> | undefined)?.data ??
+              (e.response as Record<string, unknown> | undefined)?.data
+            ) as Record<string, unknown> | undefined;
             const isNotFound =
-              httpCode === "404" ||
-              errId?.id === "app.preference.get.app_error";
+              e.httpCode === "404" ||
+              (e.response as Record<string, unknown> | undefined)?.status ===
+                404 ||
+              responseData?.id === "app.preference.get.app_error";
             if (!isNotFound)
               throw new NodeOperationError(
                 this.getNode(),

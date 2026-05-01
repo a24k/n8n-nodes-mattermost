@@ -1509,9 +1509,12 @@ describe("Mattermost execute — Thread Group Key", () => {
         const o = opts as { method: string; url: string; body?: unknown };
         requests.push({ method: o.method, url: o.url, body: o.body });
         if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
-          throw Object.assign(new Error("Bad Request"), {
-            httpCode: "400",
-            context: { data: { id: "app.preference.get.app_error" } },
+          // Simulate AxiosError shape (response.data) — what n8n httpRequest actually throws
+          throw Object.assign(new Error("Request failed with status code 400"), {
+            response: {
+              status: 400,
+              data: { id: "app.preference.get.app_error" },
+            },
           });
         }
         if (o.method === "PUT" && o.url.includes("preferences")) {
