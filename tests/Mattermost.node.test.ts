@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { describe, expect, it } from "bun:test";
 import type { IExecuteFunctions, INodeExecutionData } from "n8n-workflow";
 import { Mattermost } from "../src/nodes/Mattermost/Mattermost.node";
@@ -1253,6 +1254,276 @@ describe("Mattermost execute — testChannelId routing", () => {
 
     expect(uploadUrls[0]).toContain("channel_id=test-chan");
     expect(uploadUrls[0]).not.toContain("prod-chan");
+  });
+});
+
+function threadHash(channelId: string, key: string): string {
+  return createHash("sha256")
+    .update(`${channelId}:${key}`)
+    .digest("base64url")
+    .slice(0, 32);
+}
+
+const PREF_CATEGORY = "n8n_nodes_mattermost_threadmap";
+const BASE_URL = "https://mattermost.example.com";
+
+describe("Mattermost node description — threadGroupKey option", () => {
+  it("advancedOptions contains threadGroupKey option", () => {
+    const node = new Mattermost();
+    const advProp = node.description.properties.find(
+      (p) => p.name === "advancedOptions",
+    );
+    const optionNames = (
+      advProp?.options as Array<{ name: string }> | undefined
+    )?.map((o) => o.name);
+    expect(optionNames).toContain("threadGroupKey");
+  });
+
+  it("threadGroupKey option is type string with empty default", () => {
+    const node = new Mattermost();
+    const advProp = node.description.properties.find(
+      (p) => p.name === "advancedOptions",
+    );
+    const opt = (
+      advProp?.options as Array<{ name: string; type: string; default: unknown }> | undefined
+    )?.find((o) => o.name === "threadGroupKey");
+    expect(opt?.type).toBe("string");
+    expect(opt?.default).toBe("");
+  });
+});
+
+describe("Mattermost execute — Thread Group Key", () => {
+  it("Thread Group Key empty: no preferences calls, output unchanged", async () => {
+    const urls: string[] = [];
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { url: string };
+        urls.push(o.url);
+        return { id: "p1", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toMatch(/\/api\/v4\/posts$/);
+    expect(result[0][0].json).not.toHaveProperty("thread_group_key");
+  });
+
+  it("Thread Group Key + Root Post ID set: Root Post ID wins, no preferences calls", async () => {
+    const urls: string[] = [];
+    const bodies: unknown[] = [];
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "rootId") return "explicit-root-id";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "my-key" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { url: string; body?: unknown };
+        urls.push(o.url);
+        bodies.push(o.body);
+        return { id: "p1", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toMatch(/\/api\/v4\/posts$/);
+    expect((bodies[0] as Record<string, unknown>).root_id).toBe("explicit-root-id");
+  });
+
+  it("Thread Group Key, no existing mapping (404): creates new post, saves preference, output has thread fields", async () => {
+    const hash = threadHash("chan-1", "incident-42");
+    const requests: Array<{ method: string; url: string; body?: unknown }> = [];
+
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "message") return "first post";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "incident-42" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string; body?: unknown };
+        requests.push({ method: o.method, url: o.url, body: o.body });
+        if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
+          throw Object.assign(new Error("Not Found"), { httpCode: "404" });
+        }
+        if (o.method === "PUT" && o.url.includes("preferences")) {
+          return {};
+        }
+        return { id: "new-post-id", channel_id: "chan-1", message: "first post", file_ids: [], create_at: 111 };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+
+    // GET preferences, POST posts, PUT preferences
+    expect(requests).toHaveLength(3);
+    expect(requests[0].method).toBe("GET");
+    expect(requests[0].url).toBe(`${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/${hash}`);
+    expect(requests[1].method).toBe("POST");
+    expect((requests[1].body as Record<string, unknown>).root_id).toBeUndefined();
+    expect(requests[2].method).toBe("PUT");
+    expect(requests[2].url).toBe(`${BASE_URL}/api/v4/users/me/preferences`);
+    const prefBody = requests[2].body as Array<Record<string, unknown>>;
+    expect(prefBody[0].category).toBe(PREF_CATEGORY);
+    expect(prefBody[0].name).toBe(hash);
+    expect(prefBody[0].value).toBe("new-post-id");
+
+    expect(result[0][0].json).toMatchObject({
+      post_id: "new-post-id",
+      thread_group_key: "incident-42",
+      thread_root_post_id: null,
+    });
+  });
+
+  it("Thread Group Key, existing mapping (200): posts as thread reply, output has thread fields", async () => {
+    const hash = threadHash("chan-1", "incident-42");
+    const requests: Array<{ method: string; url: string; body?: unknown }> = [];
+
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "message") return "reply post";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "incident-42" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string; body?: unknown };
+        requests.push({ method: o.method, url: o.url, body: o.body });
+        if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
+          return { user_id: "bot-user", category: PREF_CATEGORY, name: hash, value: "root-post-id" };
+        }
+        return { id: "reply-post-id", channel_id: "chan-1", message: "reply post", file_ids: [], create_at: 222 };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+
+    // GET preferences, POST posts (no PUT)
+    expect(requests).toHaveLength(2);
+    expect(requests[0].method).toBe("GET");
+    expect(requests[1].method).toBe("POST");
+    expect((requests[1].body as Record<string, unknown>).root_id).toBe("root-post-id");
+
+    expect(result[0][0].json).toMatchObject({
+      post_id: "reply-post-id",
+      thread_group_key: "incident-42",
+      thread_root_post_id: "root-post-id",
+    });
+  });
+
+  it("Preferences GET non-404 error: throws and respects continueOnFail", async () => {
+    const ctx = createMockExecuteFunctions({
+      continueOnFail: () => true,
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "my-key" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string };
+        if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
+          throw Object.assign(new Error("Internal Server Error"), { httpCode: "500" });
+        }
+        return { id: "p", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+    expect(result[0][0].json).toHaveProperty("error");
+  });
+
+  it("Preferences PUT failure after successful post: silently ignored, post output returned normally", async () => {
+    const ctx = createMockExecuteFunctions({
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "chan-1";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { threadGroupKey: "my-key" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string };
+        if (o.method === "GET" && o.url.includes(PREF_CATEGORY)) {
+          throw Object.assign(new Error("Not Found"), { httpCode: "404" });
+        }
+        if (o.method === "PUT" && o.url.includes("preferences")) {
+          throw new Error("Preferences write failed");
+        }
+        return { id: "new-post-id", channel_id: "chan-1", message: "", file_ids: [], create_at: 0 };
+      },
+    });
+
+    const node = new Mattermost();
+    const result = await node.execute.call(ctx);
+
+    expect(result[0][0].json).toMatchObject({
+      post_id: "new-post-id",
+      thread_group_key: "my-key",
+      thread_root_post_id: null,
+    });
+    expect(result[0][0].json).not.toHaveProperty("error");
+  });
+
+  it("Hash uses effectiveChannelId (testChannelId) when in manual mode", async () => {
+    const hash = threadHash("test-chan", "my-key");
+    const getUrls: string[] = [];
+
+    const ctx = createMockExecuteFunctions({
+      getMode: () => "manual",
+      getNodeParameter: (param: string) => {
+        if (param === "channelId") return "prod-chan";
+        if (param === "rootId") return "";
+        if (param === "files") return "";
+        if (param === "attachments") return {};
+        if (param === "advancedOptions") return { testChannelId: "test-chan", threadGroupKey: "my-key" };
+        return "";
+      },
+      httpRequest: async (opts: unknown) => {
+        const o = opts as { method: string; url: string };
+        if (o.method === "GET") {
+          getUrls.push(o.url);
+          throw Object.assign(new Error("Not Found"), { httpCode: "404" });
+        }
+        if (o.method === "PUT") return {};
+        return { id: "p", channel_id: "test-chan", message: "", file_ids: [], create_at: 0 };
+      },
+    });
+
+    const node = new Mattermost();
+    await node.execute.call(ctx);
+
+    expect(getUrls[0]).toContain(hash);
+    expect(getUrls[0]).not.toContain(threadHash("prod-chan", "my-key"));
   });
 });
 

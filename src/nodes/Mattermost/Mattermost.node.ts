@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import {
   type IDataObject,
   type IExecuteFunctions,
@@ -308,6 +309,14 @@ export class Mattermost implements INodeType {
               "JSON object merged into the Mattermost post body. Use this to set API fields not available in the UI (e.g. priority, custom props keys).",
           },
           {
+            displayName: "Thread Group Key",
+            name: "threadGroupKey",
+            type: "string",
+            default: "",
+            description:
+              "Logical identifier for a thread group. Posts with the same Thread Group Key and Channel ID are automatically linked as a Mattermost thread. Ignored if Root Post ID is also set.",
+          },
+          {
             displayName: "Channel ID for Test Run",
             name: "testChannelId",
             type: "string",
@@ -391,6 +400,9 @@ export class Mattermost implements INodeType {
           testChannelId && this.getMode() === "manual"
             ? testChannelId
             : channelId;
+
+        const threadGroupKey =
+          (advancedOptions.threadGroupKey as string) ?? "";
 
         // Parse extraBodyFields
         let extraBodyFields: IDataObject = {};
@@ -523,7 +535,33 @@ export class Mattermost implements INodeType {
 
         if (skipItem) continue;
 
-        // Step 2: Build attachments
+        // Step 2: Resolve thread group key → root_id via Mattermost Preferences API
+        const PREF_CATEGORY = "n8n_nodes_mattermost_threadmap";
+        let threadRootPostId: string | null = null;
+        const useThreadGroupKey = threadGroupKey && !rootId;
+
+        if (useThreadGroupKey) {
+          const prefName = createHash("sha256")
+            .update(`${effectiveChannelId}:${threadGroupKey}`)
+            .digest("base64url")
+            .slice(0, 32);
+          const prefUrl = `${baseUrl}/api/v4/users/me/preferences/${PREF_CATEGORY}/${prefName}`;
+          try {
+            const pref = (await this.helpers.httpRequest({
+              method: "GET",
+              url: prefUrl,
+              headers: { Authorization: `Bearer ${accessToken}` },
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            })) as { value: string };
+            threadRootPostId = pref.value;
+          } catch (prefErr) {
+            const httpCode = (prefErr as Record<string, unknown>).httpCode;
+            if (httpCode !== "404") throw prefErr;
+          }
+        }
+
+        // Step 3: Build attachments
         const attachmentItems = attachmentsParam.attachment ?? [];
         const builtAttachments: Attachment[] = attachmentItems.map((att) => {
           const result: Attachment = {
@@ -582,9 +620,11 @@ export class Mattermost implements INodeType {
           postBody.message = ebfMessage;
         }
 
-        // root_id: UI wins if non-empty, else JSON value
+        // root_id: UI wins if non-empty, else thread group key lookup, else JSON value
         if (rootId) {
           postBody.root_id = rootId;
+        } else if (threadRootPostId) {
+          postBody.root_id = threadRootPostId;
         } else if (ebfRootId) {
           postBody.root_id = ebfRootId;
         }
@@ -653,14 +693,51 @@ export class Mattermost implements INodeType {
           throw postError;
         }
 
+        // Step 5: Save thread mapping when a new root post was created
+        if (useThreadGroupKey && threadRootPostId === null) {
+          const prefName = createHash("sha256")
+            .update(`${effectiveChannelId}:${threadGroupKey}`)
+            .digest("base64url")
+            .slice(0, 32);
+          try {
+            await this.helpers.httpRequest({
+              method: "PUT",
+              url: `${baseUrl}/api/v4/users/me/preferences`,
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: [
+                {
+                  user_id: "me",
+                  category: PREF_CATEGORY,
+                  name: prefName,
+                  value: postResponse.id,
+                },
+              ] as unknown as Record<string, unknown>,
+              json: true,
+              skipSslCertificateValidation: allowUnauthorizedCerts,
+            });
+          } catch {
+            // Silently ignored: post succeeded but mapping not saved.
+            // Next invocation with the same key will create a new thread.
+          }
+        }
+
+        const output: IDataObject = {
+          post_id: postResponse.id,
+          channel_id: postResponse.channel_id,
+          message: postResponse.message,
+          file_ids: postResponse.file_ids ?? [],
+          create_at: postResponse.create_at,
+        };
+        if (useThreadGroupKey) {
+          output.thread_group_key = threadGroupKey;
+          output.thread_root_post_id = threadRootPostId;
+        }
+
         returnData.push({
-          json: {
-            post_id: postResponse.id,
-            channel_id: postResponse.channel_id,
-            message: postResponse.message,
-            file_ids: postResponse.file_ids ?? [],
-            create_at: postResponse.create_at,
-          },
+          json: output,
           pairedItem: { item: i },
         });
       } catch (error) {
