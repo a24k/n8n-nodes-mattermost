@@ -556,7 +556,13 @@ export class Mattermost implements INodeType {
             threadRootPostId = pref.value;
           } catch (prefErr) {
             const httpCode = (prefErr as Record<string, unknown>).httpCode;
-            if (httpCode !== "404") throw prefErr;
+            if (httpCode !== "404") {
+              throw new NodeOperationError(
+                this.getNode(),
+                `[diag:pref-get] ${(prefErr as Error).message} — url: ${prefUrl}`,
+                { itemIndex: i },
+              );
+            }
           }
         }
 
@@ -689,7 +695,11 @@ export class Mattermost implements INodeType {
               { itemIndex: i },
             );
           }
-          throw postError;
+          throw new NodeOperationError(
+            this.getNode(),
+            `[diag:post] ${(postError as Error).message}`,
+            { itemIndex: i },
+          );
         }
 
         // Step 5: Save thread mapping when a new root post was created

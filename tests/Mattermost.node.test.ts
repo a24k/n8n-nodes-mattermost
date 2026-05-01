@@ -1069,7 +1069,7 @@ describe("Mattermost execute — error handling", () => {
 
     const node = new Mattermost();
     const result = await node.execute.call(ctx);
-    expect(result[0][0].json.error).toBe("Upstream error");
+    expect(result[0][0].json.error).toContain("Upstream error");
   });
 
   it("processes multiple items independently", async () => {
