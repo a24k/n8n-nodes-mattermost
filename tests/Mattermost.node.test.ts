@@ -1403,7 +1403,7 @@ describe("Mattermost execute — Thread Group Key", () => {
     expect(requests).toHaveLength(3);
     expect(requests[0].method).toBe("GET");
     expect(requests[0].url).toBe(
-      `${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/${hash}`,
+      `${BASE_URL}/api/v4/users/me/preferences/${PREF_CATEGORY}/name/${hash}`,
     );
     expect(requests[1].method).toBe("POST");
     expect(

@@ -544,7 +544,7 @@ export class Mattermost implements INodeType {
             .update(`${effectiveChannelId}:${threadGroupKey}`)
             .digest("base64url")
             .slice(0, 32);
-          const prefUrl = `${baseUrl}/api/v4/users/me/preferences/${PREF_CATEGORY}/${prefName}`;
+          const prefUrl = `${baseUrl}/api/v4/users/me/preferences/${PREF_CATEGORY}/name/${prefName}`;
           try {
             const pref = (await this.helpers.httpRequest({
               method: "GET",
