@@ -90,6 +90,7 @@ Added after `Attachments`.
 | Option | Name | Type | Default | Description |
 |--------|------|------|---------|-------------|
 | Extra Body Fields | `extraBodyFields` | `json` | `{}` | JSON object merged into the Mattermost post body. Use to set API fields not exposed in the UI (e.g. `priority`, custom `props` keys). |
+| Thread Group Key | `threadGroupKey` | `string` | `""` | Logical identifier for a thread group. Posts with the same Thread Group Key and Channel ID are automatically linked as a Mattermost thread. Ignored if Root Post ID is also set. |
 | Channel ID for Test Run | `testChannelId` | `string` | `""` | When set, posts are sent to this channel instead of Channel ID during test runs (manual executions from the editor). Useful for routing test runs to a sandbox channel without modifying the main Channel ID. Corresponds to `$execution.mode === "test"` in n8n expressions. |
 | Upload Files Sequentially | `uploadFilesSequentially` | `boolean` | `false` | When enabled, files are uploaded one at a time in the listed order. Use to control display order. Parallel upload (default) is faster but does not guarantee order. |
 
@@ -105,7 +106,7 @@ The final post body is built in two passes.
 |----------|---------------|------|
 | Channel ID | `channel_id` | UI always wins; overridden by `testChannelId` when non-empty and execution mode is `"manual"` (test run) |
 | Message | `message` | UI wins if non-empty |
-| Root Post ID | `root_id` | UI wins if non-empty |
+| Root Post ID | `root_id` | UI wins if non-empty; Thread Group Key lookup second; JSON value last |
 
 *Array concatenation:*
 
@@ -123,7 +124,7 @@ Other keys inside `extraBodyFields.props` are deep-merged; keys unique to JSON a
 
 ## Output Schema
 
-### Success
+### Success (Thread Group Key not used)
 
 ```json
 {
@@ -132,6 +133,34 @@ Other keys inside `extraBodyFields.props` are deep-merged; keys unique to JSON a
   "message": "...",
   "file_ids": ["..."],
   "create_at": 1234567890000
+}
+```
+
+### Success (Thread Group Key used — new root post)
+
+```json
+{
+  "post_id": "...",
+  "channel_id": "...",
+  "message": "...",
+  "file_ids": [],
+  "create_at": 1234567890000,
+  "thread_group_key": "my-incident-123",
+  "thread_root_post_id": null
+}
+```
+
+### Success (Thread Group Key used — thread reply)
+
+```json
+{
+  "post_id": "...",
+  "channel_id": "...",
+  "message": "...",
+  "file_ids": [],
+  "create_at": 1234567890000,
+  "thread_group_key": "my-incident-123",
+  "thread_root_post_id": "..."
 }
 ```
 
@@ -164,8 +193,25 @@ This output also applies when a mid-sequence upload failure occurs in sequential
 |-----------|----------|
 | File upload | `POST /api/v4/files?channel_id=<id>` |
 | Create post | `POST /api/v4/posts` |
+| Look up thread mapping | `GET /api/v4/users/me/preferences/n8n_nodes_mattermost_threadmap/name/{name}` |
+| Resolve bot user ID | `GET /api/v4/users/me` |
+| Store thread mapping | `PUT /api/v4/users/me/preferences` |
 
 File upload uses `multipart/form-data` with field name **`files`** (plural). `channel_id` is a query parameter. Response: `{ file_infos: [{ id: "..." }] }`.
+
+### Thread Mapping Storage (Mattermost Preferences API)
+
+| Field | Value |
+|-------|-------|
+| Category | `n8n_nodes_mattermost_threadmap` |
+| Name | SHA-256(`"${effectiveChannelId}:${threadGroupKey}"`) → first 20 bytes → lowercase base32 (RFC 4648) → 32 chars |
+| Value | Mattermost Post ID of the root post |
+
+**Preference not found:** `GET` returns HTTP 400 with `id: "app.preference.get.app_error"` (not 404 or 200+`[]`). This is treated as "no mapping exists" — a new root post is created.
+
+**`user_id` in PUT body:** Must be the bot's real user ID (fetched via `GET /api/v4/users/me`). The literal string `"me"` fails Mattermost's `IsValidId()` validation and causes a silent 400.
+
+**Preference PUT failure:** Silently ignored. The post output is returned normally with `thread_root_post_id: null`. The next invocation with the same key will create a new root post.
 
 ---
 
