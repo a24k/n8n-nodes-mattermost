@@ -576,7 +576,12 @@ export class Mattermost implements INodeType {
             threadRootPostId = pref.value;
           } catch (prefErr) {
             const httpCode = (prefErr as Record<string, unknown>).httpCode;
-            if (httpCode !== "404") throw prefErr;
+            if (httpCode !== "404")
+              throw new NodeOperationError(
+                this.getNode(),
+                `[diag:pref-get] ${(prefErr as Error).message} — url: ${prefUrl} name: ${prefName}`,
+                { itemIndex: i },
+              );
           }
         }
 
